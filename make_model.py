@@ -15,9 +15,8 @@ def imdb_modelMaking(vocab_size=10000, max_len=2000, embedding_dim=100):
     model = Sequential()
     # model.add(layers.Input(max_len))                      # (각 문장 길이). (25000, 2000)으로 사용해도 구동은 되나 생략가능.
     model.add(layers.Embedding(vocab_size, embedding_dim))  # (문장에서 등장하는(정수인코딩 된)단어 총수, 임베딩 벡터 차원).
-    model.add(layers.GRU(128))                              # RNN의 일종인 GRU로 예측
-    model.add(layers.Dense(64, activation='relu'))
-
+    model.add(layers.GRU(64))                              # RNN의 일종인 GRU로 예측
+    model.add(layers.Dense(32, activation='relu'))
     model.add(layers.Dense(1, activation='sigmoid'))
 
     model.compile(optimizer="adam", loss="binary_crossentropy", metrics=["accuracy"])
