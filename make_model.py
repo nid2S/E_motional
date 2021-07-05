@@ -22,4 +22,4 @@ def imdb_modelMaking(vocab_size=10000, max_len=2000, embedding_dim=100):
     model.compile(optimizer="adam", loss="binary_crossentropy", metrics=["accuracy"])
     model.fit(X_train, Y_train, epochs=100, validation_data=(X_test, Y_test),
               callbacks=[EarlyStopping(monitor="val_loss", patience=3),
-                         ModelCheckpoint('model/imdb.h5', monitor='val_acc', mode='max', verbose=1, save_best_only=True)])
+                         ModelCheckpoint('model/imdb.h5', monitor='val_accuracy', mode='max', verbose=1, save_best_only=True)])
