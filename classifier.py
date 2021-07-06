@@ -5,8 +5,8 @@ import make_model
 # make_model.imdb_modelMaking()
 
 model = load_model("model/imdb.h5")
-# input sent & prediction
 test = preprocessing.imdb_preprocessing(input("긍정/부정 여부를 판단할 문장 입력(영어) : "))
+
 
 prediction = model.predict(test)
 if prediction:    # 1 in prediction:
