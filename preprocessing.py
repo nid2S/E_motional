@@ -2,6 +2,7 @@ import re
 from tensorflow.keras.datasets import imdb
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 
+
 def imdb_preprocessing(new_sentence, vocab_size=10000, max_len=2000):
     """eng only"""
 
@@ -21,10 +22,11 @@ def imdb_preprocessing(new_sentence, vocab_size=10000, max_len=2000):
                 encoded.append(2)
         # 단어 집합에 없는 단어는 <unk> 토큰으로 취급.
         except KeyError:
-            print("없는 단어 : "+word)
+            print("없는 단어 : " + word)
             encoded.append(2)
 
     # max_len(2000)으로 길이를 맞춰 패딩 후 반환
     return pad_sequences([encoded], maxlen=max_len)  # 패딩
+
 
 pass
