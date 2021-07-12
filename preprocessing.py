@@ -29,4 +29,5 @@ def imdb_preprocessing(new_sentence, vocab_size=10000, max_len=2000):
     return pad_sequences([encoded], maxlen=max_len)  # 패딩
 
 
+# make another model's preprocesser
 pass
