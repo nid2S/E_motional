@@ -1,10 +1,12 @@
 import speech_recognition as sr
 import pyaudio
+import wave
 
 CHUNK = 1024
 FORMAT = pyaudio.paInt16
 CHANNELS = 1
 RATE = 44100
+OUTPUT_FILENAME = "audio/output.wav"
 
 def record(record_sec: int):
     p = pyaudio.PyAudio()
@@ -19,25 +21,25 @@ def record(record_sec: int):
     stream.close()
     p.terminate()
 
-    frames = b''.join(frames)
-    # with wave.open(WAVE_OUTPUT_FILENAME, 'wb') as wf:
-    #     wf.setnchannels(CHANNELS)
-    #     wf.setsampwidth(p.get_sample_size(FORMAT))
-    #     wf.setframerate(RATE)
-    #     wf.writeframes(b''.join(frames))
-    #     wf.close()
+    with wave.open(OUTPUT_FILENAME, 'wb') as wf:
+        wf.setnchannels(CHANNELS)
+        wf.setsampwidth(p.get_sample_size(FORMAT))
+        wf.setframerate(RATE)
+        wf.writeframes(b''.join(frames))
+        wf.close()
 
-    return frames
+    return b''.join(frames)
 
 def STT(record_sec: int):
+    record(record_sec)
     recognizer = sr.Recognizer()
-    audio = record(record_sec)
-    # with sr.AudioFile(audio/WAVE_FILE_NAME) as source:
-    #     audio = recognizer.record(source)
+    with sr.AudioFile(OUTPUT_FILENAME) as source:
+        audio = recognizer.record(source)
     try:
         txt = recognizer.recognize_google(audio_data=audio, language='en-UR')
     except sr.UnknownValueError:
         print("언어(영어)가 인지되지 않았습니다")
         return None
+    print("인지된 문자 : "+txt)
 
     return txt
