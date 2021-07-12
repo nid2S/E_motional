@@ -13,12 +13,13 @@ def record(record_sec: int):
     print("녹음을 시작합니다.")
     for i in range(int(RATE/CHUNK * record_sec)):
         data = stream.read(CHUNK)
-        frames.append(bytes(data))
+        frames.append(data)
     print("녹음을 종료합니다.")
     stream.stop_stream()
     stream.close()
     p.terminate()
 
+    frames = b''.join(frames)
     # with wave.open(WAVE_OUTPUT_FILENAME, 'wb') as wf:
     #     wf.setnchannels(CHANNELS)
     #     wf.setsampwidth(p.get_sample_size(FORMAT))
@@ -34,9 +35,9 @@ def STT(record_sec: int):
     # with sr.AudioFile(audio/WAVE_FILE_NAME) as source:
     #     audio = recognizer.record(source)
     try:
-        txt = recognizer.recognize_google(audio_data=audio, language='ko-KR')
+        txt = recognizer.recognize_google(audio_data=audio, language='en-UR')
     except sr.UnknownValueError:
-        print("언어가 인지되지 않았습니다")
+        print("언어(영어)가 인지되지 않았습니다")
         return None
 
     return txt
