@@ -6,7 +6,7 @@ CHUNK = 1024
 FORMAT = pyaudio.paInt16
 CHANNELS = 1
 RATE = 44100
-OUTPUT_FILENAME = "D:/workspace/Git_project/textClassifier/audio/output.wav"
+OUTPUT_FILENAME = "/textClassifier/imdb/audio/output.wav"
 
 def record(record_sec: int):
     p = pyaudio.PyAudio()

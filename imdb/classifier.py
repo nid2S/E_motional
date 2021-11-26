@@ -1,5 +1,5 @@
 from tensorflow.keras.models import load_model
-from textClassifier import make_model, preprocessing, SpeechRec
+from textClassifier.imdb import preprocessing, SpeechRec
 
 # make_model.imdb_modelMaking()
 
