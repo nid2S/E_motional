@@ -25,25 +25,34 @@ def make_dataset():
     for conv in sentimental_V:
         val.append(pd.DataFrame([conv['talk']['content']['HS01'], sentimental_label[conv['profile']['emotion']['emotion-id'][-2]]], columns=["data", "label"]))
 
+    # save sentimental dataset
     train.to_csv('./data/senimental_T.txt', sep="\t", encoding="utf-8")
     val.to_csv('./data/senimental_V.txt', sep="\t", encoding="utf-8")
-    del train, val
-    train = pd.DataFrame(columns=["data", "label"])
-    val = pd.DataFrame(columns=["data", "label"])
     hist = []
 
     print('start making multimodal video dataset')
     for fpath in os.listdir("./data/멀티모달_영상"):
         for fname in os.listdir("./data/멀티모달_영상/"+fpath):
             temp_mm = json.load(open("./data/멀티모달_영상/" + fpath + "/" + fname + "/" + fname + ".json", 'r+', encoding='utf-8'))
-            for key in temp_mm['data']:
+            for key in temp_mm['data']:  # repeat for all data in this file
                 for conv in temp_mm['data'][key]:
-                    # 1. 문장이 중복된게 있음. -> 따로 리스트를 만들어서 그쪽을 검사시키자
-                    # 2. 화자에 따라 데이터 저장 장소가 다름 -> keys의 항목을 보고 결정
-                    # 3. 데이터가 큼 -> 중간중간 저장/초기화 or 내 메모리를 믿고 시도
+                    for person in ['1', '2', '3']:
+                        if 'text' not in conv[person].keys():  # find text data
+                            continue
+                        if conv[person]['text']['script'] in hist:  # skip duplicate sentence
+                            continue
 
-                    # train.append(pd.DataFrame([conv['1']['text']['script'], multimodal_label[conv['1']]], columns=["data", "label"]))
-                    pass
+                        hist.append(conv[person]['text']['script'])
+                        if random.randint(1, 10) > 4:  # train val split in random (7:3)
+                            train.append(pd.DataFrame([conv[person]['text']['script'],
+                                                      multimodal_label[conv[person]['emotion']['text']['emotion']]], columns=["data", "label"]))
+                        else:
+                            val.append(pd.DataFrame([conv[person]['text']['script'],
+                                                    multimodal_label[conv[person]['emotion']['text']['emotion']]], columns=["data", "label"]))
+    train.to_csv('./data/train.txt', sep='\t', encoding='utf-8')
+    val.to_csv('./data/val.txt', sep='\t', encoding='utf-8')
+
+    print('making dataset finished.')
 
 class Preprocesser:
     def __init__(self, use_HF=False):
