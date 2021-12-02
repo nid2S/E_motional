@@ -9,11 +9,13 @@ def make_dataset():
     pass
 
 class Preprocesser:
-    def __init__(self):
-        # self.MODEL_NAME = ""
-        # self.tokenizer = BertTokenizerFast.from_pretrained(self.MODEL_NAME)
-        self.tokenizer = tokenizers.Tokenizer(BPE())
-        self.set_tokenizer()
+    def __init__(self, use_HF=False):
+        self.MODEL_NAME = "skt/kobert-base-v1"
+        if use_HF:
+            self.tokenizer = BertTokenizerFast.from_pretrained(self.MODEL_NAME)
+        else:
+            self.tokenizer = tokenizers.Tokenizer(BPE())
+            self.set_tokenizer()
 
         # hyper parameter
         self.batch_size = 16
