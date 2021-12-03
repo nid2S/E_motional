@@ -11,8 +11,9 @@ def make_dataset():
     # sentimental => T - 40827 , V - 5122 | multimodal => T - ?, V - ? (7:3)
     train = pd.DataFrame(columns=["data", "label"])
     val = pd.DataFrame(columns=["data", "label"])
+    hist = []
 
-    # print('making label dict')
+    print('making label dict')
     all_label = pd.read_csv("./data/label.txt", encoding="utf-8", names=["label", "s_label", "m_label"])
     sentimental_label = dict([(s_label[0], label) for _, (label, s_label, _) in all_label.iterrows() if int(label) < 6])
     multimodal_label = dict([(m_label, label) for _, (label, _, m_label) in all_label.iterrows() if pd.notna(m_label)])
@@ -26,18 +27,22 @@ def make_dataset():
     for conv in sentimental_V:
         val.append(pd.DataFrame([[conv['talk']['content']['HS01'],
                                  sentimental_label[conv['profile']['emotion']['emotion-id'][-2]]]], columns=["data", "label"]))
-    hist = []
 
     print('start making multimodal video dataset')
     for fpath in os.listdir("./data/멀티모달_영상"):
         for fname in os.listdir("./data/멀티모달_영상/"+fpath):
-            temp_mm = json.load(open("./data/멀티모달_영상/" + fpath + "/" + fname + "/" + fname + ".json", 'r+', encoding='utf-8'))
+            try:
+                temp_mm = json.load(open("./data/멀티모달_영상/" + fpath + "/" + fname + "/" + fname + ".json", 'r+', encoding='utf-8'))
+            except UnicodeDecodeError:
+                temp_mm = json.load(open("./data/멀티모달_영상/" + fpath + "/" + fname + "/" + fname + ".json", 'r+', encoding='949'))
+
             for conv in temp_mm['data'].values():  # repeat for all data in this file
                 for person in conv.keys():
                     if 'text' not in conv[person].keys():  # find text data
                         continue
                     if conv[person]['text']['script'] in hist:  # skip duplicate sentence
                         continue
+
                     hist.append(conv[person]['text']['script'])
                     if random.randint(1, 10) > 4:  # train val split in random (7:3)
                         train.append(pd.DataFrame([[conv[person]['text']['script'],
@@ -45,6 +50,8 @@ def make_dataset():
                     else:
                         val.append(pd.DataFrame([[conv[person]['text']['script'],
                                                 multimodal_label[conv[person]['emotion']['text']['emotion']]]], columns=["data", "label"]))
+                    print(f"sentence {len(hist)} added")
+
     train.to_csv('./data/train.txt', sep='\t', encoding='utf-8')
     val.to_csv('./data/val.txt', sep='\t', encoding='utf-8')
 
