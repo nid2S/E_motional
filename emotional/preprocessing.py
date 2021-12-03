@@ -5,6 +5,7 @@ import tensorflow as tf
 import pandas as pd
 import random
 import json
+import re
 import os
 
 def make_dataset():
@@ -12,6 +13,7 @@ def make_dataset():
     train = pd.DataFrame(columns=["data", "label"])
     val = pd.DataFrame(columns=["data", "label"])
     hist = []
+    mm_num = 0
 
     print('making label dict')
     all_label = pd.read_csv("./data/label.txt", encoding="utf-8", names=["label", "s_label", "m_label"])
@@ -50,7 +52,8 @@ def make_dataset():
                     else:
                         val.append(pd.DataFrame([[conv[person]['text']['script'],
                                                 multimodal_label[conv[person]['emotion']['text']['emotion']]]], columns=["data", "label"]))
-                    print(f"sentence {len(hist)} added")
+                    mm_num += 1
+                    print(f"sentence {mm_num} added")
 
     train.to_csv('./data/train.txt', sep='\t', encoding='utf-8')
     val.to_csv('./data/val.txt', sep='\t', encoding='utf-8')
@@ -59,6 +62,7 @@ def make_dataset():
 
 class Preprocesser:
     def __init__(self, use_HF=False):
+        self.use_HF = use_HF
         self.MODEL_NAME = "skt/kobert-base-v1"
         if use_HF:
             self.tokenizer = BertTokenizerFast.from_pretrained(self.MODEL_NAME)
@@ -81,4 +85,4 @@ class Preprocesser:
     def getValidationDataset(self):
         pass
 
-make_dataset()
+
