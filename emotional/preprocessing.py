@@ -1,8 +1,9 @@
 from transformers import BertTokenizerFast
 from tokenizers.models import BPE
-import tokenizers
+from typing import Union
 import tensorflow as tf
 import pandas as pd
+import tokenizers
 import random
 import json
 import re
@@ -13,7 +14,6 @@ def make_dataset():
     train = pd.DataFrame(columns=["data", "label"])
     val = pd.DataFrame(columns=["data", "label"])
     hist = []
-    mm_num = 0
 
     print('making label dict')
     all_label = pd.read_csv("./data/label.txt", encoding="utf-8", names=["label", "s_label", "m_label"])
@@ -24,11 +24,11 @@ def make_dataset():
     sentimental_T = json.load(open('./data/감성대화/감성대화말뭉치(최종데이터)_Training/감성대화말뭉치(최종데이터)_Training.json', 'r+', encoding='utf-8'))
     sentimental_V = json.load(open('./data/감성대화/감성대화말뭉치(최종데이터)_Validation/감성대화말뭉치(최종데이터)_Validation.json', 'r+', encoding='utf-8'))
     for conv in sentimental_T:
-        train.append(pd.DataFrame([[conv['talk']['content']['HS01'],
-                                   sentimental_label[conv['profile']['emotion']['emotion-id'][-2]]]], columns=["data", "label"]))
+        train = train.append(pd.DataFrame([[conv['talk']['content']['HS01'],
+                                          sentimental_label[conv['profile']['emotion']['emotion-id'][-2]]]], columns=["data", "label"]))
     for conv in sentimental_V:
-        val.append(pd.DataFrame([[conv['talk']['content']['HS01'],
-                                 sentimental_label[conv['profile']['emotion']['emotion-id'][-2]]]], columns=["data", "label"]))
+        val = val.append(pd.DataFrame([[conv['talk']['content']['HS01'],
+                                      sentimental_label[conv['profile']['emotion']['emotion-id'][-2]]]], columns=["data", "label"]))
 
     print('start making multimodal video dataset')
     for fpath in os.listdir("./data/멀티모달_영상"):
@@ -42,18 +42,18 @@ def make_dataset():
                 for person in conv.keys():
                     if 'text' not in conv[person].keys():  # find text data
                         continue
+                    # if conv[person]['text']['script'] == hist[-1]:  # skip duplicate sentence
                     if conv[person]['text']['script'] in hist:  # skip duplicate sentence
                         continue
 
                     hist.append(conv[person]['text']['script'])
                     if random.randint(1, 10) > 4:  # train val split in random (7:3)
-                        train.append(pd.DataFrame([[conv[person]['text']['script'],
-                                                  multimodal_label[conv[person]['emotion']['text']['emotion']]]], columns=["data", "label"]))
+                        train = train.append(pd.DataFrame([[conv[person]['text']['script'],
+                                                          multimodal_label[conv[person]['emotion']['text']['emotion']]]], columns=["data", "label"]))
                     else:
-                        val.append(pd.DataFrame([[conv[person]['text']['script'],
-                                                multimodal_label[conv[person]['emotion']['text']['emotion']]]], columns=["data", "label"]))
-                    mm_num += 1
-                    print(f"sentence {mm_num} added")
+                        val = val.append(pd.DataFrame([[conv[person]['text']['script'],
+                                                      multimodal_label[conv[person]['emotion']['text']['emotion']]]], columns=["data", "label"]))
+            print(f"multi_modal {fname[5:]} ended")
 
     train.to_csv('./data/train.txt', sep='\t', encoding='utf-8')
     val.to_csv('./data/val.txt', sep='\t', encoding='utf-8')
@@ -61,28 +61,46 @@ def make_dataset():
     print('making dataset finished.')
 
 class Preprocesser:
-    def __init__(self, use_HF=False):
+    def __init__(self, use_HF=True):
         self.use_HF = use_HF
         self.MODEL_NAME = "skt/kobert-base-v1"
-        if use_HF:
-            self.tokenizer = BertTokenizerFast.from_pretrained(self.MODEL_NAME)
-        else:
+        self.SEED = 1000
+        if not use_HF:
             self.tokenizer = tokenizers.Tokenizer(BPE())
             self.set_tokenizer()
+        else:
+            self.tokenizer = BertTokenizerFast.from_pretrained(self.MODEL_NAME)
 
         # hyper parameter
         self.batch_size = 16
         self.input_dim = 0
-        self.output_dim = 0
-        self.embed_dim = 0
+        self.output_dim = 11
+        self.embed_dim = 128
 
     def set_tokenizer(self):
         pass
 
-    def getTrainDataset(self):
-        pass
+    def getTrainDataset(self) -> tf.data.Dataset:
+        # 데이터 max_length 확인 | 개수 확인 | 데이터셋 질 확인
+        train_set = pd.read_csv("./data/train.txt", sep="\t", encoding="utf-8", names=["data", "label"])
+        train_set["data"] = train_set["data"].apply(lambda data: self.tokenize(data))
+        train_set["label"] = train_set["label"].apply(lambda data: tf.constant(int(data)))
 
-    def getValidationDataset(self):
-        pass
+        return tf.data.Dataset.from_tensor_slices((train_set["data"].tolist(), train_set["label"].tolist()))\
+            .batch(self.batch_size).shuffle(256, seed=self.SEED)
 
+    def getValidationDataset(self) -> tf.data.Dataset:
+        val_set = pd.read_csv("./data/val.txt", sep="\t", encoding="utf-8", names=["data", "label"])
+        val_set["data"] = val_set["data"].apply(lambda data: self.tokenize(data))
+        val_set["label"] = val_set["label"].apply(lambda data: tf.constant(int(data)))
 
+        return tf.data.Dataset.from_tensor_slices((val_set["data"].tolist(), val_set["label"].tolist())) \
+            .batch(self.batch_size).shuffle(256, seed=self.SEED)
+
+    def tokenize(self, text: str) -> Union[tf.Tensor, list[int]]:
+        if self.use_HF:
+            text = re.sub("\W", " ", text)
+            text = re.sub("[은는이가을를에게]", "", text)
+            return self.tokenizer.encode(text, max_length=self.input_dim, padding="max_length", truncation=True, return_tensors="tf")
+        else:
+            pass
