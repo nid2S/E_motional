@@ -1,5 +1,6 @@
 from transformers import BertTokenizerFast
 from tokenizers.models import BPE
+from string import punctuation
 from typing import Union
 import tensorflow as tf
 import pandas as pd
@@ -82,7 +83,7 @@ class Preprocesser:
 
     def getTrainDataset(self) -> tf.data.Dataset:
         # 데이터 max_length 확인 | 개수 확인 | 데이터셋 질 확인
-        train_set = pd.read_csv("./data/train.txt", sep="\t", encoding="utf-8", names=["data", "label"])
+        train_set = pd.read_csv("./data/train.txt", sep="\t", encoding="utf-8").drop(['Unnamed: 0'], axis=1)
         train_set["data"] = train_set["data"].apply(lambda data: self.tokenize(data))
         train_set["label"] = train_set["label"].apply(lambda data: tf.constant(int(data)))
 
@@ -90,7 +91,7 @@ class Preprocesser:
             .batch(self.batch_size).shuffle(256, seed=self.SEED)
 
     def getValidationDataset(self) -> tf.data.Dataset:
-        val_set = pd.read_csv("./data/val.txt", sep="\t", encoding="utf-8", names=["data", "label"])
+        val_set = pd.read_csv("./data/val.txt", sep="\t", encoding="utf-8").drop(['Unnamed: 0'], axis=1)
         val_set["data"] = val_set["data"].apply(lambda data: self.tokenize(data))
         val_set["label"] = val_set["label"].apply(lambda data: tf.constant(int(data)))
 
@@ -100,7 +101,7 @@ class Preprocesser:
     def tokenize(self, text: str) -> Union[tf.Tensor, list[int]]:
         if self.use_HF:
             text = re.sub("\W", " ", text)
-            text = re.sub("[은는이가을를에게]", "", text)
+            text = re.sub(f"[{punctuation}]", "", text)
             return self.tokenizer.encode(text, max_length=self.input_dim, padding="max_length", truncation=True, return_tensors="tf")
         else:
             pass
