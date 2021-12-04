@@ -1,4 +1,4 @@
-from transformers import BertTokenizerFast
+from transformers import ElectraTokenizerFast
 from tokenizers.models import BPE
 from string import punctuation
 from typing import Union
@@ -64,13 +64,13 @@ def make_dataset():
 class Preprocesser:
     def __init__(self, use_HF=True):
         self.use_HF = use_HF
-        self.MODEL_NAME = "skt/kobert-base-v1"
+        self.MODEL_NAME = "monologg/koelectra-base-v3-discriminator"
         self.SEED = 1000
         if not use_HF:
             self.tokenizer = tokenizers.Tokenizer(BPE())
             self.set_tokenizer()
         else:
-            self.tokenizer = BertTokenizerFast.from_pretrained(self.MODEL_NAME)
+            self.tokenizer = ElectraTokenizerFast.from_pretrained(self.MODEL_NAME)
 
         # hyper parameter
         self.batch_size = 16
