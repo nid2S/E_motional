@@ -1,6 +1,5 @@
 from transformers import ElectraTokenizerFast
 from tokenizers.models import BPE
-from string import punctuation
 from typing import Union
 import tensorflow as tf
 import pandas as pd
@@ -11,7 +10,7 @@ import re
 import os
 
 def make_dataset():
-    # sentimental => T - 40827 , V - 5122 | multimodal => T - ?, V - ? (7:3)
+    # train - 86958, val - 35578 | sentimental => T - 40827, V - 5122 | multimodal => T - 46131, V - 30456
     train = pd.DataFrame(columns=["data", "label"])
     val = pd.DataFrame(columns=["data", "label"])
     hist = []
@@ -74,7 +73,7 @@ class Preprocesser:
 
         # hyper parameter
         self.batch_size = 16
-        self.input_dim = 0
+        self.input_dim = 100  # train max : 99, val max : 82
         self.output_dim = 11
         self.embed_dim = 128
 
@@ -87,7 +86,7 @@ class Preprocesser:
         train_set["data"] = train_set["data"].apply(lambda data: self.tokenize(data))
         train_set["label"] = train_set["label"].apply(lambda data: tf.constant(int(data)))
 
-        return tf.data.Dataset.from_tensor_slices((train_set["data"].tolist(), train_set["label"].tolist()))\
+        return tf.data.Dataset.from_tensor_slices((train_set["data"].to_list(), train_set["label"].to_list()))\
             .batch(self.batch_size).shuffle(256, seed=self.SEED)
 
     def getValidationDataset(self) -> tf.data.Dataset:
@@ -95,13 +94,13 @@ class Preprocesser:
         val_set["data"] = val_set["data"].apply(lambda data: self.tokenize(data))
         val_set["label"] = val_set["label"].apply(lambda data: tf.constant(int(data)))
 
-        return tf.data.Dataset.from_tensor_slices((val_set["data"].tolist(), val_set["label"].tolist())) \
+        return tf.data.Dataset.from_tensor_slices((val_set["data"].to_list(), val_set["label"].to_list())) \
             .batch(self.batch_size).shuffle(256, seed=self.SEED)
 
     def tokenize(self, text: str) -> Union[tf.Tensor, list[int]]:
         if self.use_HF:
-            text = re.sub("\W", " ", text)
-            text = re.sub(f"[{punctuation}]", "", text)
+            text = re.sub(r"\W", r" ", text)
+            text = re.sub(r"[은는이가을를에게께]", "", text)
             return self.tokenizer.encode(text, max_length=self.input_dim, padding="max_length", truncation=True, return_tensors="tf")
         else:
             pass
