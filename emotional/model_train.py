@@ -1,17 +1,17 @@
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
-from transformers import TFElectraForSequenceClassification
+from transformers import TFBertForSequenceClassification
 from preprocessing import Preprocesser
 import tensorflow as tf
 import argparse
 
-parser = argparse.ArgumentParser()
-parser.add_argument('-hf', '--use-hf', type=bool, default=False, metavar='Bool', dest="use_HF", help='condition about using HF model')
-use_HF = parser.parse_args().use_HF
-
+# parser = argparse.ArgumentParser()
+# parser.add_argument('-hf', '--use-hf', type=bool, default=True, metavar='Bool', dest="use_HF", help='condition about using HF model')
+# use_HF = parser.parse_args().use_HF
+use_HF = True
 p = Preprocesser(use_HF)
 
 def HF_model():
-    return TFElectraForSequenceClassification.from_pretrained(p.MODEL_NAME, from_pt=True, num_labels=p.output_dim)
+    return TFBertForSequenceClassification.from_pretrained(p.MODEL_NAME, from_pt=True, num_labels=p.output_dim)
 
 def TF_model(use_rnn: bool = True) -> tf.keras.Model:
     if use_rnn:
@@ -41,7 +41,9 @@ else:
 optim = tf.optimizers.Adam(learning_rate=lr)
 
 # train
-model.compile(optim, "sparse_categorical_crossentropy", "accuracy")
+loss = tf.keras.losses.CategoricalCrossentropy(from_logits=True)
+model.compile(optim, loss, "accuracy")
 model.fit(p.getTrainDataset(), validation_data=p.getValidationDataset(), batch_size=p.batch_size, epochs=epochs,
           callbacks=[EarlyStopping(monitor='val_loss', patience=3), ModelCheckpoint("./model/emotion_classification",
                                                                                     monitor="val_accuracy", save_best_only=True)])
+model.save("./model/emotion.h5")

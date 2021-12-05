@@ -1,4 +1,4 @@
-from transformers import ElectraTokenizerFast
+from transformers import BertTokenizerFast
 from tokenizers.models import BPE
 from typing import Union
 import tensorflow as tf
@@ -69,7 +69,7 @@ class Preprocesser:
             self.tokenizer = tokenizers.Tokenizer(BPE())
             self.set_tokenizer()
         else:
-            self.tokenizer = ElectraTokenizerFast.from_pretrained(self.MODEL_NAME)
+            self.tokenizer = BertTokenizerFast.from_pretrained(self.MODEL_NAME)
 
         # hyper parameter
         self.batch_size = 16
@@ -81,21 +81,38 @@ class Preprocesser:
         pass
 
     def getTrainDataset(self) -> tf.data.Dataset:
-        # 데이터 max_length 확인 | 개수 확인 | 데이터셋 질 확인
-        train_set = pd.read_csv("./data/train.txt", sep="\t", encoding="utf-8").drop(['Unnamed: 0'], axis=1)
-        train_set["data"] = train_set["data"].apply(lambda data: self.tokenize(data))
-        train_set["label"] = train_set["label"].apply(lambda data: tf.constant(int(data)))
+        if self.use_HF:
+            train_set = pd.read_csv("./data/train.txt", sep="\t", encoding="utf-8").drop(['Unnamed: 0'], axis=1)
+            train_X = train_set["data"].apply(lambda data: re.sub(r"[은는이가을를에게께]", r"", re.sub(r"\W", r" ", data)))
+            train_X = self.tokenizer.batch_encode_plus(train_X.to_list(), max_length=self.input_dim,
+                                                       padding="max_length", truncation=True, return_tensors="tf")
+            en_train_X = dict()
+            for key, item in train_X.items():
+                en_train_X[key] = item
 
-        return tf.data.Dataset.from_tensor_slices((train_set["data"].to_list(), train_set["label"].to_list()))\
-            .batch(self.batch_size).shuffle(256, seed=self.SEED)
+            train_y = train_set["label"].apply(lambda data: int(data))
+            en_train_y = tf.keras.utils.to_categorical(train_y)
+
+            return tf.data.Dataset.from_tensor_slices((en_train_X, en_train_y)).batch(self.batch_size).shuffle(256, seed=self.SEED)
+        else:
+            pass
 
     def getValidationDataset(self) -> tf.data.Dataset:
-        val_set = pd.read_csv("./data/val.txt", sep="\t", encoding="utf-8").drop(['Unnamed: 0'], axis=1)
-        val_set["data"] = val_set["data"].apply(lambda data: self.tokenize(data))
-        val_set["label"] = val_set["label"].apply(lambda data: tf.constant(int(data)))
+        if self.use_HF:
+            val_set = pd.read_csv("./data/val.txt", sep="\t", encoding="utf-8").drop(['Unnamed: 0'], axis=1)
+            val_X = val_set["data"].apply(lambda data: re.sub(r"[은는이가을를에게께]", r"", re.sub(r"\W", r" ", data)))
+            val_X = self.tokenizer.batch_encode_plus(val_X.to_list(), max_length=self.input_dim,
+                                                     padding="max_length", truncation=True, return_tensors="tf")
+            en_val_X = dict()
+            for key, item in val_X.items():
+                en_val_X[key] = item
 
-        return tf.data.Dataset.from_tensor_slices((val_set["data"].to_list(), val_set["label"].to_list())) \
-            .batch(self.batch_size).shuffle(256, seed=self.SEED)
+            val_y = val_set["label"].apply(lambda data: int(data))
+            en_val_y = tf.keras.utils.to_categorical(val_y)
+
+            return tf.data.Dataset.from_tensor_slices((en_val_X, en_val_y)).batch(self.batch_size).shuffle(256, seed=self.SEED)
+        else:
+            pass
 
     def tokenize(self, text: str) -> Union[tf.Tensor, list[int]]:
         if self.use_HF:
