@@ -1,5 +1,5 @@
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
-from transformers import TFBertForSequenceClassification
+from transformers import TFMobileBertForSequenceClassification
 from preprocessing import Preprocesser
 import tensorflow as tf
 import argparse
@@ -11,7 +11,7 @@ use_HF = True
 p = Preprocesser(use_HF)
 
 def HF_model():
-    return TFBertForSequenceClassification.from_pretrained(p.MODEL_NAME, from_pt=True, num_labels=p.output_dim)
+    return TFMobileBertForSequenceClassification.from_pretrained(p.MODEL_NAME, from_pt=True, num_labels=p.output_dim)
 
 def TF_model(use_rnn: bool = True) -> tf.keras.Model:
     if use_rnn:
