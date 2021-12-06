@@ -1,6 +1,6 @@
 from transformers import BertTokenizerFast
 from tokenizers.models import BPE
-from typing import Union
+from typing import Union, List
 import tensorflow as tf
 import pandas as pd
 import tokenizers
@@ -114,7 +114,7 @@ class Preprocesser:
         else:
             pass
 
-    def tokenize(self, text: str) -> Union[tf.Tensor, list[int]]:
+    def tokenize(self, text: str) -> Union[tf.Tensor, List[int]]:
         if self.use_HF:
             text = re.sub(r"\W", r" ", text)
             text = re.sub(r"[은는이가을를에게께]", "", text)
