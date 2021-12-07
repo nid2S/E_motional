@@ -4,10 +4,10 @@ from preprocessing import Preprocesser
 import tensorflow as tf
 import argparse
 
-# parser = argparse.ArgumentParser()
-# parser.add_argument('-hf', '--use-hf', type=bool, default=True, metavar='Bool', dest="use_HF", help='condition about using HF model')
-# use_HF = parser.parse_args().use_HF
-use_HF = True
+parser = argparse.ArgumentParser()
+parser.add_argument('-hf', '--use-hf', type=bool, default=False, metavar='Bool', dest="use_HF", help='condition about using HF model')
+use_HF = parser.parse_args().use_HF
+
 p = Preprocesser(use_HF)
 
 def HF_model():
@@ -32,16 +32,18 @@ if use_HF:
     epochs = 4
     lr = 3e-5
     p.batch_size = 32
+    from_logits = True
     model = HF_model()
 else:
     epochs = 50
     lr = 0.01
     p.batch_size = 16
+    from_logits = False
     model = TF_model()
 optim = tf.optimizers.Adam(learning_rate=lr)
 
 # train
-loss = tf.keras.losses.CategoricalCrossentropy(from_logits=True)
+loss = tf.keras.losses.CategoricalCrossentropy(from_logits=from_logits)
 model.compile(optim, loss, "accuracy")
 model.fit(p.getTrainDataset(), validation_data=p.getValidationDataset(), batch_size=p.batch_size, epochs=epochs,
           callbacks=[EarlyStopping(monitor='val_loss', patience=3), ModelCheckpoint("./model/emotion_classification",

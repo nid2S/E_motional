@@ -1,9 +1,7 @@
 from transformers import BertTokenizerFast
-from tokenizers.models import BPE
 from typing import Union, List
 import tensorflow as tf
 import pandas as pd
-import tokenizers
 import random
 import json
 import re
@@ -66,8 +64,7 @@ class Preprocesser:
         self.MODEL_NAME = "monologg/koelectra-base-v3-discriminator"
         self.SEED = 1000
         if not use_HF:
-            self.tokenizer = tokenizers.Tokenizer(BPE())
-            self.set_tokenizer()
+            pass
         else:
             self.tokenizer = BertTokenizerFast.from_pretrained(self.MODEL_NAME)
 
@@ -76,9 +73,6 @@ class Preprocesser:
         self.input_dim = 100  # train max : 99, val max : 82
         self.output_dim = 11
         self.embed_dim = 128
-
-    def set_tokenizer(self):
-        pass
 
     def getTrainDataset(self) -> tf.data.Dataset:
         if self.use_HF:
