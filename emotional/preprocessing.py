@@ -1,4 +1,5 @@
 from transformers import BertTokenizerFast
+from konlpy.tag import Hannanum
 from typing import Union, List
 import tensorflow as tf
 import pandas as pd
@@ -64,15 +65,16 @@ class Preprocesser:
         self.MODEL_NAME = "monologg/koelectra-base-v3-discriminator"
         self.SEED = 1000
         if not use_HF:
-            pass
+            self.tokenizer = Hannanum()
+            self.input_dim = None
         else:
             self.tokenizer = BertTokenizerFast.from_pretrained(self.MODEL_NAME)
+            self.input_dim = 100  # train max : 99, val max : 82
+        self.output_dim = 11
 
         # hyper parameter
-        self.batch_size = 16
-        self.input_dim = 100  # train max : 99, val max : 82
-        self.output_dim = 11
         self.embed_dim = 128
+        self.batch_size = 16
 
     def getTrainDataset(self) -> tf.data.Dataset:
         if self.use_HF:
@@ -89,6 +91,7 @@ class Preprocesser:
 
             return tf.data.Dataset.from_tensor_slices((en_train_X, en_train_y)).batch(self.batch_size).shuffle(256, seed=self.SEED)
         else:
+            train_set = pd.read_csv("./data/train.txt", sep="\t", encoding="utf-8").drop(['Unnamed: 0'], axis=1)
             pass
 
     def getValidationDataset(self) -> tf.data.Dataset:
@@ -108,10 +111,16 @@ class Preprocesser:
         else:
             pass
 
-    def tokenize(self, text: str) -> Union[tf.Tensor, List[int]]:
+    def tokenize(self, text: str, return_tensor: bool = True) -> Union[tf.Tensor, List[int]]:
         if self.use_HF:
             text = re.sub(r"\W", r" ", text)
             text = re.sub(r"[은는이가을를에게께]", "", text)
             return self.tokenizer.encode(text, max_length=self.input_dim, padding="max_length", truncation=True, return_tensors="tf")
         else:
-            pass
+            # N - 체언 | P - 용어 | F - 외국어
+            text = [token for (token, tag) in self.tokenizer.pos(text) if ('N' in tag) or ('P' in tag) or ('F' in tag)]
+            # TODO 토큰들을 정수인코딩 해야 함 -> vocab을 만들던가 vocab을 찾던가 해야 함.
+            if return_tensor:
+                return tf.convert_to_tensor(text)
+            else:
+                return text
