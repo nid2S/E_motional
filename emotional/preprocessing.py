@@ -59,11 +59,16 @@ def make_dataset():
 
     print('making dataset finished.')
 
+def make_vocab():
+    pass
+
 class Preprocesser:
     def __init__(self, use_HF=True):
         self.use_HF = use_HF
         self.MODEL_NAME = "monologg/koelectra-base-v3-discriminator"
         self.SEED = 1000
+        self.vocab = dict([(key, index) for _, (key, index) in pd.read_csv("./data/vocab.txt", sep="\t", encoding="utf-8").iterrows()])
+        self.id_to_token = dict([(index, key) for _, (key, index) in pd.read_csv("./data/vocab.txt", sep="\t", encoding="utf-8").iterrows()])
         if not use_HF:
             self.tokenizer = Hannanum()
             self.input_dim = None
@@ -118,8 +123,7 @@ class Preprocesser:
             return self.tokenizer.encode(text, max_length=self.input_dim, padding="max_length", truncation=True, return_tensors="tf")
         else:
             # N - 체언 | P - 용어 | F - 외국어
-            text = [token for (token, tag) in self.tokenizer.pos(text) if ('N' in tag) or ('P' in tag) or ('F' in tag)]
-            # TODO 토큰들을 정수인코딩 해야 함 -> vocab을 만들던가 vocab을 찾던가 해야 함.
+            text = [self.vocab[token] for (token, tag) in self.tokenizer.pos(text) if ('N' in tag) or ('P' in tag) or ('F' in tag)]
             if return_tensor:
                 return tf.convert_to_tensor(text)
             else:
