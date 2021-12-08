@@ -97,7 +97,10 @@ class Preprocesser:
             return tf.data.Dataset.from_tensor_slices((en_train_X, en_train_y)).batch(self.batch_size).shuffle(256, seed=self.SEED)
         else:
             train_set = pd.read_csv("./data/train.txt", sep="\t", encoding="utf-8").drop(['Unnamed: 0'], axis=1)
-            pass
+            train_X = train_set["data"].apply(lambda x: self.tokenize(x))
+            train_y = tf.keras.utils.to_categorical(train_set["label"].apply(lambda data: int(data)))
+
+            return tf.data.Dataset.from_tensor_slices((train_X, train_y)).batch(self.batch_size).shuffle(256, seed=self.SEED)
 
     def getValidationDataset(self) -> tf.data.Dataset:
         if self.use_HF:
@@ -114,7 +117,11 @@ class Preprocesser:
 
             return tf.data.Dataset.from_tensor_slices((en_val_X, en_val_y)).batch(self.batch_size).shuffle(256, seed=self.SEED)
         else:
-            pass
+            val_set = pd.read_csv("./data/val.txt", sep="\t", encoding="utf-8").drop(['Unnamed: 0'], axis=1)
+            val_X = val_set["data"].apply(lambda x: self.tokenize(x))
+            val_y = tf.keras.utils.to_categorical(val_set["label"].apply(lambda data: int(data)))
+
+            return tf.data.Dataset.from_tensor_slices((val_X, val_y)).batch(self.batch_size).shuffle(256, seed=self.SEED)
 
     def tokenize(self, text: str, return_tensor: bool = True) -> Union[tf.Tensor, List[int]]:
         if self.use_HF:
@@ -124,6 +131,7 @@ class Preprocesser:
         else:
             # N - 체언 | P - 용어 | F - 외국어
             text = [self.vocab[token] for (token, tag) in self.tokenizer.pos(text) if ('N' in tag) or ('P' in tag) or ('F' in tag)]
+            text = (text + [0] * (self.input_dim - len(text)))[:self.input_dim]
             if return_tensor:
                 return tf.convert_to_tensor(text)
             else:
