@@ -60,7 +60,47 @@ def make_dataset():
     print('making dataset finished.')
 
 def make_vocab():
-    pass
+    hist = []
+    vocab = dict()
+    tokenizer = Hannanum()
+
+    print('start sentimental conversation dataset.')
+    sentimental_T1 = json.load(open('./data/감성대화/감성대화말뭉치(최종데이터)_Training/감성대화말뭉치(최종데이터)_Training.json', 'r+', encoding='utf-8'))
+    sentimental_T2 = json.load(open('./data/감성대화/감성대화말뭉치(원천데이터)_Training/감성대화말뭉치(원시데이터)_Training.json', 'r+', encoding='utf-8'))
+    sentimental_V1 = json.load(open('./data/감성대화/감성대화말뭉치(최종데이터)_Validation/감성대화말뭉치(최종데이터)_Validation.json', 'r+', encoding='utf-8'))
+    sentimental_V2 = json.load(open('./data/감성대화/감성대화말뭉치(원천데이터)_Validation/감성대화말뭉치(원시데이터)_Validation.json', 'r+', encoding='utf-8'))
+    for dataset in [sentimental_T1, sentimental_T2, sentimental_V1, sentimental_V2]:
+        for conv in dataset:
+            for sentence in conv['talk']['content'].values():
+                for token in [t for (t, tag) in tokenizer.pos(sentence) if ('N' in tag) or ('P' in tag) or ('F' in tag)]:
+                    if token not in vocab:
+                        vocab[token] = len(vocab)
+        print("one of dataset ended")
+
+    print('start multimodal video dataset')
+    for fpath in os.listdir("./data/멀티모달_영상"):
+        for fname in os.listdir("./data/멀티모달_영상/" + fpath):
+            try:
+                temp_mm = json.load(
+                    open("./data/멀티모달_영상/" + fpath + "/" + fname + "/" + fname + ".json", 'r+', encoding='utf-8'))
+            except UnicodeDecodeError:
+                temp_mm = json.load(
+                    open("./data/멀티모달_영상/" + fpath + "/" + fname + "/" + fname + ".json", 'r+', encoding='949'))
+
+            for conv in temp_mm['data'].values():  # repeat for all data in this file
+                for person in conv.keys():
+                    if 'text' not in conv[person].keys():  # find text data
+                        continue
+                    if conv[person]['text']['script'] == hist[-1]:  # skip duplicate sentence
+                        continue
+                    hist.append(conv[person]['text']['script'])
+                    for token in [t for (t, tag) in tokenizer.pos(hist[-1]) if ('N' in tag) or ('P' in tag) or ('F' in tag)]:
+                        if token not in vocab:
+                            vocab[token] = len(vocab)
+            print(f"multi_modal {fname[5:]} ended")
+
+    pd.DataFrame((token, index) for token, index in vocab.items()).to_csv("./data/vocab.txt", sep="\t", encoding="utf-8", header=False, index=False)
+    print('making vocabulary finished.')
 
 class Preprocesser:
     def __init__(self, use_HF=True):
