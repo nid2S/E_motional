@@ -64,6 +64,9 @@ def make_vocab():
     vocab = dict()
     tokenizer = Hannanum()
 
+    vocab['<pad>'] = 0
+    vocab['<oov>'] = 1
+
     print('start sentimental conversation dataset.')
     sentimental_T1 = json.load(open('./data/감성대화/감성대화말뭉치(최종데이터)_Training/감성대화말뭉치(최종데이터)_Training.json', 'r+', encoding='utf-8'))
     sentimental_T2 = json.load(open('./data/감성대화/감성대화말뭉치(원천데이터)_Training/감성대화말뭉치(원시데이터)_Training.json', 'r+', encoding='utf-8'))
@@ -169,8 +172,11 @@ class Preprocesser:
             text = re.sub(r"[은는이가을를에게께]", "", text)
             return self.tokenizer.encode(text, max_length=self.input_dim, padding="max_length", truncation=True, return_tensors="tf")
         else:
-            # N - 체언 | P - 용어 | F - 외국어
-            text = [self.vocab[token] for (token, tag) in self.tokenizer.pos(text) if ('N' in tag) or ('P' in tag) or ('F' in tag)]
+            # N - 체언 | P - 용언 | F - 외국어
+            text = [token for (token, tag) in self.tokenizer.pos(text) if ('N' in tag) or ('P' in tag) or ('F' in tag)]
+            for i, token in enumerate(text):
+                text[i] = self.vocab[token] if token in self.vocab else self.vocab['<oov>']
+
             text = (text + [0] * (self.input_dim - len(text)))[:self.input_dim]
             if return_tensor:
                 return tf.convert_to_tensor(text)
