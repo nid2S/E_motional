@@ -60,7 +60,7 @@ def make_dataset():
     print('making dataset finished.')
 
 def make_vocab():
-    hist = []
+    hist = [""]
     vocab = dict()
     tokenizer = Hannanum()
 
