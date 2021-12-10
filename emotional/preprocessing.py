@@ -75,7 +75,7 @@ def make_vocab():
     for dataset in [sentimental_T1, sentimental_T2, sentimental_V1, sentimental_V2]:
         for conv in dataset:
             for sentence in conv['talk']['content'].values():
-                for token in [t for (t, tag) in tokenizer.pos(sentence) if ('N' in tag) or ('P' in tag) or ('F' in tag)]:
+                for token in [t for (t, tag) in tokenizer.pos(re.sub(r"\W", r" ", sentence)) if ('N' in tag) or ('P' in tag) or ('F' in tag)]:
                     if token not in vocab:
                         vocab[token] = len(vocab)
         print("one of dataset ended")
@@ -97,7 +97,7 @@ def make_vocab():
                     if conv[person]['text']['script'] == hist[-1]:  # skip duplicate sentence
                         continue
                     hist.append(conv[person]['text']['script'])
-                    for token in [t for (t, tag) in tokenizer.pos(hist[-1]) if ('N' in tag) or ('P' in tag) or ('F' in tag)]:
+                    for token in [t for (t, tag) in tokenizer.pos(re.sub(r'\W', r" ", hist[-1])) if ('N' in tag) or ('P' in tag) or ('F' in tag)]:
                         if token not in vocab:
                             vocab[token] = len(vocab)
             print(f"multi_modal {fname[5:]} ended")
@@ -173,6 +173,7 @@ class Preprocesser:
             return self.tokenizer.encode(text, max_length=self.input_dim, padding="max_length", truncation=True, return_tensors="tf")
         else:
             # N - 체언 | P - 용언 | F - 외국어
+            text = re.sub(r"\W", r" ", text)
             text = [token for (token, tag) in self.tokenizer.pos(text) if ('N' in tag) or ('P' in tag) or ('F' in tag)]
             for i, token in enumerate(text):
                 text[i] = self.vocab[token] if token in self.vocab else self.vocab['<oov>']
