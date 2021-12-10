@@ -83,6 +83,8 @@ def make_vocab():
     print('start multimodal video dataset')
     for fpath in os.listdir("./data/멀티모달_영상"):
         for fname in os.listdir("./data/멀티모달_영상/" + fpath):
+            # if fname[5:].strip() == "4266":  # sometimes making vocab stop in 4266, so skip.
+            #     continue
             try:
                 temp_mm = json.load(
                     open("./data/멀티모달_영상/" + fpath + "/" + fname + "/" + fname + ".json", 'r+', encoding='utf-8'))
