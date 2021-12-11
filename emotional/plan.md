@@ -19,3 +19,5 @@
 - ValueError: Cannot reshape a tensor with 768 elements to shape [1,1,100,1] (100 elements) 에러 발생. Epoch 후, 에러코드를 보니 층 정규화 단계에서 에러발생.
 - 해결 : 변경사항 1 -> toCategorical 후 Sparse에서 CategoricalCrossentropy로 바꿈 | 변경사항 2 : batch_encode_plus 후 dict형태로 전달.
 - 어느쪽이 문제였을지 모르겠으나, Epochs 후 층 정규화 쪽에서 형상변환 오류가 생겼던 걸로 보아 Sparse 쪽이 문제가 아니였을까 함.
+
+- vocab 생성 중 중간에 갑자기 교착상태에 빠지는 오류가 있었음. 확인결과 konlpy의 pos함수는 공백만 존재하는 문장을 입력하면 그런 상태가 되었었음.
