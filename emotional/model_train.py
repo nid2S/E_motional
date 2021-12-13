@@ -14,18 +14,21 @@ def HF_model():
     return TFMobileBertForSequenceClassification.from_pretrained(p.MODEL_NAME, from_pt=True, num_labels=p.output_dim)
 
 def TF_model(use_LSTM: bool = True, use_Bidirectional: bool = False) -> tf.keras.Model:
-    x = tf.keras.layers.Input(shape=(None, p.batch_size), batch_size=p.batch_size)
-    x = tf.keras.layers.Embedding(input_dim=p.input_dim, output_dim=p.embed_dim)(x)
+    input_layer = tf.keras.layers.Input(shape=p.input_dim)
+    x = tf.keras.layers.Embedding(input_dim=len(p.vocab), output_dim=p.embed_dim)(input_layer)
+
     if use_LSTM:
-        x = tf.keras.layers.LSTM(64, activation="tanh", dropout=0.3)(x)
+        RNN_layer = tf.keras.layers.LSTM(64, activation="tanh", dropout=0.3)
     else:
-        x = tf.keras.layers.GRU(64, activation="tanh", dropout=0.3)(x)
+        RNN_layer = tf.keras.layers.GRU(64, activation="tanh", dropout=0.3)
     if use_Bidirectional:
-        x = tf.keras.layers.Bidirectional(x)
-    x = tf.keras.layers.Dense(32, activation='relu', dropout=0.3)(x)
+        RNN_layer = tf.keras.layers.Bidirectional(RNN_layer)
+
+    x = RNN_layer(x)
+    x = tf.keras.layers.Dense(32, activation='relu')(x)
 
     y = tf.keras.layers.Dense(p.output_dim, activation='softmax')(x)
-    return tf.keras.Model(x, y)
+    return tf.keras.Model(input_layer, y)
 
 
 # hyper_param
@@ -67,7 +70,7 @@ else:
     history = ""
     for optim in ["adam", "rmsprop", "nadam"]:
         for order_RNN in ["LSTM", "GRU"]:
-            for use_Bi in ["Bi", ""]:
+            for use_Bi in ["", "Bi"]:
                 model = TF_model(use_LSTM=(order_RNN == "LSTM"), use_Bidirectional=(use_Bi=="Bi"))
                 model.compile(optim, loss, "accuracy")
                 hist = model.fit(p.getTrainDataset(), validation_data=p.getValidationDataset(), batch_size=p.batch_size, epochs=epochs,

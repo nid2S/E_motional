@@ -21,3 +21,13 @@
 - 어느쪽이 문제였을지 모르겠으나, Epochs 후 층 정규화 쪽에서 형상변환 오류가 생겼던 걸로 보아 Sparse 쪽이 문제가 아니였을까 함.
 
 - vocab 생성 중 중간에 갑자기 교착상태에 빠지는 오류가 있었음. 확인결과 konlpy의 pos함수는 공백만 존재하는 문장을 입력하면 그런 상태가 되었었음.
+
+- tensorflow.python.framework.errors_impl.InvalidArgumentError:  indices[22,2] = 4109 is not in [0, 55 | Errors may have originated from an input operation.
+- input_layer = tf.keras.layers.Input(shape=p.input_dim) | x = tf.keras.layers.Embedding(input_dim=p.input_dim(55), output_dim=p.embed_dim)(input_layer)
+  입력차원이 임베딩 레이어에 들어오는 값이 차원이 아니라 들어온 데이터의 원핫인코딩된(진짜)차원인 듯. vocab size와 동일하게 설정해 줘야 함.
+- ValueError: Input 0 of layer lstm is incompatible with the layer: expected ndim=3, found ndim=4. Full shape received: (None, None, 55, 128)
+- input_layer = tf.keras.layers.Input(shape=(None, p.input_dim)) | x = tf.keras.layers.Embedding(input_dim=len(p.vocab), output_dim=p.embed_dim)(input_layer)
+  shape는 batch를 포함하지 않아, (None, input_dim)로 입력하면 입력데이터의 차원이 그런줄 알아서, 저기에 batch_size로 None이 붙어 ndim이 4가 되니 생기는 오류.
+- -> input_layer = tf.keras.layers.Input(shape=p.input_dim) | x = tf.keras.layers.Embedding(input_dim=len(p.vocab), output_dim=p.embed_dim)(input_layer)
+  로 변경하니 결론적으로는 해결되었음. 
+

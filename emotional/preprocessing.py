@@ -1,6 +1,6 @@
 from transformers import BertTokenizerFast
+from typing import Union, List, Sequence
 from konlpy.tag import Hannanum
-from typing import Union, List
 import tensorflow as tf
 import pandas as pd
 import random
@@ -114,7 +114,7 @@ class Preprocesser:
         self.id_to_token = dict([(index, key) for _, (key, index) in pd.read_csv("./data/vocab.txt", sep="\t", encoding="utf-8").iterrows()])
         if not use_HF:
             self.tokenizer = Hannanum()
-            self.input_dim = None
+            self.input_dim = 55  # train max : 55, val max : 47
         else:
             self.tokenizer = BertTokenizerFast.from_pretrained(self.MODEL_NAME)
             self.input_dim = 100  # train max : 99, val max : 82
@@ -143,7 +143,7 @@ class Preprocesser:
             train_X = train_set["data"].apply(lambda x: self.tokenize(x))
             train_y = tf.keras.utils.to_categorical(train_set["label"].apply(lambda data: int(data)))
 
-            return tf.data.Dataset.from_tensor_slices((train_X, train_y)).batch(self.batch_size).shuffle(256, seed=self.SEED)
+            return tf.data.Dataset.from_tensor_slices((train_X.to_list(), train_y)).batch(self.batch_size).shuffle(256, seed=self.SEED)
 
     def getValidationDataset(self) -> tf.data.Dataset:
         if self.use_HF:
@@ -164,7 +164,7 @@ class Preprocesser:
             val_X = val_set["data"].apply(lambda x: self.tokenize(x))
             val_y = tf.keras.utils.to_categorical(val_set["label"].apply(lambda data: int(data)))
 
-            return tf.data.Dataset.from_tensor_slices((val_X, val_y)).batch(self.batch_size).shuffle(256, seed=self.SEED)
+            return tf.data.Dataset.from_tensor_slices((val_X.to_list(), val_y)).batch(self.batch_size).shuffle(256, seed=self.SEED)
 
     def tokenize(self, text: str, return_tensor: bool = True) -> Union[tf.Tensor, List[int]]:
         if self.use_HF:
@@ -173,7 +173,7 @@ class Preprocesser:
             return self.tokenizer.encode(text, max_length=self.input_dim, padding="max_length", truncation=True, return_tensors="tf")
         else:
             # N - 체언 | P - 용언 | F - 외국어
-            text = re.sub(r"\W", r" ", text)
+            text = re.sub(r"\W", r" ", text).strip()
             text = [token for (token, tag) in self.tokenizer.pos(text) if ('N' in tag) or ('P' in tag) or ('F' in tag)]
             for i, token in enumerate(text):
                 text[i] = self.vocab[token] if token in self.vocab else self.vocab['<oov>']
@@ -183,3 +183,6 @@ class Preprocesser:
                 return tf.convert_to_tensor(text)
             else:
                 return text
+
+    def decode(self, token_ids: Sequence[int]) -> str:
+        return " ".join([self.id_to_token[token_id] for token_id in token_ids])
