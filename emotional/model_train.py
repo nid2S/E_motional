@@ -1,6 +1,7 @@
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, LearningRateScheduler
 from transformers import TFMobileBertForSequenceClassification
 from preprocessing import Preprocesser
+import matplotlib.pyplot as plt
 import tensorflow as tf
 import argparse
 
@@ -38,7 +39,7 @@ if use_HF:
     from_logits = True
     model = HF_model()
 else:
-    epochs = 100
+    epochs = 150
     p.batch_size = 32
     from_logits = False
     model = TF_model()
@@ -67,15 +68,27 @@ if use_HF:
                                 ModelCheckpoint("./model/emotion_classification", monitor="val_accuracy", save_best_only=True)])
     model.save("./model/emotion.h5")
 else:
-    history = ""
+    pos = 1
     for optim in ["adam", "rmsprop", "nadam"]:
         for order_RNN in ["LSTM", "GRU"]:
             for use_Bi in ["", "Bi"]:
-                model = TF_model(use_LSTM=(order_RNN == "LSTM"), use_Bidirectional=(use_Bi=="Bi"))
+                plt.subplot(3, 4, pos)
+                pos += 1
+
+                model = TF_model(use_LSTM=(order_RNN == "LSTM"), use_Bidirectional=(use_Bi == "Bi"))
                 model.compile(optim, loss, "accuracy")
                 hist = model.fit(p.getTrainDataset(), validation_data=p.getValidationDataset(), batch_size=p.batch_size, epochs=epochs,
                                  callbacks=[EarlyStopping(monitor='val_loss', patience=3), LearningRateScheduler(lr_scheduler),
                                             ModelCheckpoint("./model/emotion_"+use_Bi+order_RNN+"_"+optim, monitor="val_accuracy", save_best_only=True)])
-                model.save("./model/emotion_"+order_RNN + "_" + optim+".h5")
-                history += use_Bi + order_RNN + "_" + optim + ":" + str(hist) + "\n"
-    open("./model/history.txt", "w+", encoding="utf-8").write(history)
+
+                plt.plot(range(1, epochs+1), hist.history["loss"], "r", label="loss")
+                plt.plot(range(1, epochs+1), hist.history["accuracy"], "b", label="accuracy")
+                plt.plot(range(1, epochs+1), hist.history["val_loss"], "g", label="val_loss")
+                plt.plot(range(1, epochs+1), hist.history["val_accuracy"], "k", label="val_accuracy")
+                plt.title(optim+"_"+use_Bi+order_RNN)
+                plt.xlabel("epoch")
+                plt.ylabel("loss/accuracy")
+                plt.xticks(range(1, epochs+1))
+                plt.xlim(0.9, epochs+0.1)
+                plt.legend()
+    plt.savefig("./history.png")
