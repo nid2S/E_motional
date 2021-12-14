@@ -86,6 +86,7 @@ else:
                 plt.plot(range(1, epochs+1), hist.history["val_loss"], "g", label="val_loss")
                 plt.plot(range(1, epochs+1), hist.history["val_accuracy"], "k", label="val_accuracy")
                 plt.title(optim+"_"+use_Bi+order_RNN)
+                plt.text(5, 3, str(max(hist.history["val_accuracy"])))
                 plt.xlabel("epoch")
                 plt.ylabel("loss/accuracy")
                 plt.xticks(range(1, epochs+1))
