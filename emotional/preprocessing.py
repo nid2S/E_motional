@@ -111,6 +111,7 @@ class Preprocesser:
         self.MODEL_NAME = "monologg/koelectra-base-v3-discriminator"
         self.SEED = 1000
         self.vocab = dict([(key, index) for _, (key, index) in pd.read_csv("./data/vocab.txt", sep="\t", encoding="utf-8").iterrows()])
+        self.vocab_size = len(self.vocab) + 1
         self.id_to_token = dict([(index, key) for _, (key, index) in pd.read_csv("./data/vocab.txt", sep="\t", encoding="utf-8").iterrows()])
         if not use_HF:
             self.tokenizer = Hannanum()

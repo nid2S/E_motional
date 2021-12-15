@@ -16,7 +16,7 @@ def HF_model():
 
 def TF_model(use_LSTM: bool = True, use_Bidirectional: bool = False) -> tf.keras.Model:
     input_layer = tf.keras.layers.Input(shape=p.input_dim)
-    x = tf.keras.layers.Embedding(input_dim=len(p.vocab), output_dim=p.embed_dim)(input_layer)
+    x = tf.keras.layers.Embedding(input_dim=p.vocab_size, output_dim=p.embed_dim)(input_layer)
 
     if use_LSTM:
         RNN_layer = tf.keras.layers.LSTM(64, activation="tanh", dropout=0.3)

@@ -25,6 +25,7 @@
 - tensorflow.python.framework.errors_impl.InvalidArgumentError:  indices[22,2] = 4109 is not in [0, 55 | Errors may have originated from an input operation.
 - input_layer = tf.keras.layers.Input(shape=p.input_dim) | x = tf.keras.layers.Embedding(input_dim=p.input_dim(55), output_dim=p.embed_dim)(input_layer)
   입력차원이 임베딩 레이어에 들어오는 값이 차원이 아니라 들어온 데이터의 원핫인코딩된(진짜)차원인 듯. vocab size와 동일하게 설정해 줘야 함.
+  -> input_dim으로 설정했던 55가 vocab size로 인식되어, 입력 데이터 중 특정 인덱스(이경우엔 22, 2)의 데이터가 해당 범위를 넘자 생긴 오류. 
 - ValueError: Input 0 of layer lstm is incompatible with the layer: expected ndim=3, found ndim=4. Full shape received: (None, None, 55, 128)
 - input_layer = tf.keras.layers.Input(shape=(None, p.input_dim)) | x = tf.keras.layers.Embedding(input_dim=len(p.vocab), output_dim=p.embed_dim)(input_layer)
   shape는 batch를 포함하지 않아, (None, input_dim)로 입력하면 입력데이터의 차원이 그런줄 알아서, 저기에 batch_size로 None이 붙어 ndim이 4가 되니 생기는 오류.
