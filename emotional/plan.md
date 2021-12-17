@@ -32,3 +32,6 @@
 - -> input_layer = tf.keras.layers.Input(shape=p.input_dim) | x = tf.keras.layers.Embedding(input_dim=len(p.vocab), output_dim=p.embed_dim)(input_layer)
   로 변경하니 결론적으로는 해결되었음. 
 
+- 모델 학습 과정에서 val_accuracy가 0.3193에서 변하지 않는 현상이 발생했음. -> 추후 약간의 변화가 있긴 했으나, 0.001 안팎의 변화였음
+-  -> 모델의 파라미터가 갱신이 되지 않았다? -> loss나 accuracy는 변화했음. | lr이나 모델 파라미터 수정, 추후 트랜스포머로의 교체등의 테스트와 텐서보드의 사용이 필요해 보임.
+
