@@ -53,9 +53,9 @@ def lr_scheduler(epoch, lr):
         else:
             return 1e-5
     else:
-        if epoch < 5:
+        if epoch < 10:
             return 0.1
-        elif epoch < 10:
+        elif epoch < 20:
             return 0.01
         else:
             return 0.001 * tf.exp(-0.1)
@@ -80,7 +80,7 @@ else:
                 model = TF_model(use_LSTM=(order_RNN == "LSTM"), use_Bidirectional=(use_Bi == "Bi"))
                 model.compile(optim, loss, "accuracy")
                 hist = model.fit(p.getTrainDataset(), validation_data=p.getValidationDataset(), batch_size=p.batch_size, epochs=epochs,
-                                 callbacks=[EarlyStopping(monitor='val_loss', mode="min", patience=5), LearningRateScheduler(lr_scheduler),
+                                 callbacks=[EarlyStopping(monitor='val_loss', mode="min", patience=7), LearningRateScheduler(lr_scheduler),
                                             ModelCheckpoint("./model/emotion_"+use_Bi+order_RNN+"_"+optim, monitor="val_accuracy", save_best_only=True)])
 
                 plt.plot(range(1, len(hist.history["loss"])+1), hist.history["loss"], "r", label="loss")
