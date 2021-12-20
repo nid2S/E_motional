@@ -81,7 +81,8 @@ else:
                 model.compile(optim, loss, "accuracy")
                 hist = model.fit(p.getTrainDataset(), validation_data=p.getValidationDataset(), batch_size=p.batch_size, epochs=epochs,
                                  callbacks=[EarlyStopping(monitor='val_loss', mode="min", patience=7), LearningRateScheduler(lr_scheduler),
-                                            ModelCheckpoint("./model/emotion_"+use_Bi+order_RNN+"_"+optim, monitor="val_accuracy", save_best_only=True)])
+                                            ModelCheckpoint("./model/"+use_Bi+order_RNN+"/"+optim+"_max_accuracy", monitor="val_accuracy", save_best_only=True),
+                                            ModelCheckpoint("./model/"+use_Bi+order_RNN+"/"+optim+"_min_loss", mode="min", monitor="val_loss", save_best_only=True)])
 
                 plt.plot(range(1, len(hist.history["loss"])+1), hist.history["loss"], "r", label="loss")
                 plt.plot(range(1, len(hist.history["loss"])+1), hist.history["accuracy"], "b", label="accuracy")
