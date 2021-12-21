@@ -75,6 +75,7 @@ else:
         for order_RNN in ["LSTM", "GRU"]:
             for use_Bi in ["", "Bi"]:
                 plt.subplot(3, 4, pos)
+                plt.figure(figsize=(50, 50))
                 pos += 1
 
                 model = TF_model(use_LSTM=(order_RNN == "LSTM"), use_Bidirectional=(use_Bi == "Bi"))
@@ -89,7 +90,8 @@ else:
                 plt.plot(range(1, len(hist.history["loss"])+1), hist.history["val_loss"], "g", label="val_loss")
                 plt.plot(range(1, len(hist.history["loss"])+1), hist.history["val_accuracy"], "k", label="val_accuracy")
                 plt.title(optim+"_"+use_Bi+order_RNN)
-                plt.text(5, 3, str(max(hist.history["val_accuracy"])))
+                plt.text(1, 3, "acc : %.1f" % str(max(hist.history["val_accuracy"])))
+                plt.text(1, 6, "loss : %.1f" % str(min(hist.history["val_loss"])))
                 plt.xlabel("epoch")
                 plt.ylabel("loss/accuracy")
                 plt.xticks(range(1, len(hist.history["loss"])+1))
