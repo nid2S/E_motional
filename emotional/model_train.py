@@ -80,7 +80,7 @@ else:
                 model = TF_model(use_LSTM=(order_RNN == "LSTM"), use_Bidirectional=(use_Bi == "Bi"))
                 model.compile(optim, loss, "accuracy")
                 hist = model.fit(p.getTrainDataset(), validation_data=p.getValidationDataset(), batch_size=p.batch_size, epochs=epochs,
-                                 callbacks=[EarlyStopping(monitor='val_loss', mode="min", patience=7), LearningRateScheduler(lr_scheduler),
+                                 callbacks=[EarlyStopping(monitor='val_loss', mode="min", patience=5), LearningRateScheduler(lr_scheduler),
                                             ModelCheckpoint("./model/"+use_Bi+order_RNN+"/"+optim+"_max_accuracy", monitor="val_accuracy", save_best_only=True),
                                             ModelCheckpoint("./model/"+use_Bi+order_RNN+"/"+optim+"_min_loss", mode="min", monitor="val_loss", save_best_only=True)])
 
