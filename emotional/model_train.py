@@ -1,9 +1,11 @@
-from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, LearningRateScheduler
+from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, LearningRateScheduler, TensorBoard
 from transformers import TFMobileBertForSequenceClassification
 from preprocessing import Preprocesser
 import matplotlib.pyplot as plt
 import tensorflow as tf
 import argparse
+import datetime
+import os
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-hf', '--use-hf', type=bool, default=True, metavar='Bool', dest="use_HF", help='condition about using HF model')
@@ -53,12 +55,10 @@ def TF_model(order_model: str = "LSTM", use_Bidirectional: bool = False) -> tf.k
 if use_HF:
     epochs = 4
     p.batch_size = 32
-    from_logits = True
     model = HF_model()
 else:
     epochs = 150
     p.batch_size = 32
-    from_logits = False
     model = TF_model()
 
 def lr_scheduler(epoch, lr):
@@ -79,12 +79,14 @@ def lr_scheduler(epoch, lr):
 
 
 # train
-loss = tf.keras.losses.CategoricalCrossentropy(from_logits=from_logits)
+log_dir = os.path.join('./logs', datetime.datetime.now().strftime('%Y%m%d-%H%M%S'))
+loss = tf.keras.losses.CategoricalCrossentropy()
 if use_HF:
     model.compile("adam", loss, "accuracy")
     hist = model.fit(p.getTrainDataset(), validation_data=p.getValidationDataset(), batch_size=p.batch_size, epochs=epochs,
                      callbacks=[EarlyStopping(monitor='val_loss', patience=3), LearningRateScheduler(lr_scheduler),
-                                ModelCheckpoint("./model/emotion_classification", monitor="val_accuracy", save_best_only=True)])
+                                ModelCheckpoint("./model/emotion_classification", monitor="val_accuracy", save_best_only=True),
+                                TensorBoard(log_dir=log_dir, write_graph=True, write_images=True, histogram_freq=1)])
 else:
     pos = 1
     for model_order in ["LSTM", "CNN", "attention"]:
