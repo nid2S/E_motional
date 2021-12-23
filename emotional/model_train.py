@@ -6,13 +6,19 @@ import tensorflow as tf
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-hf', '--use-hf', type=bool, default=False, metavar='Bool', dest="use_HF", help='condition about using HF model')
+parser.add_argument('-hf', '--use-hf', type=bool, default=True, metavar='Bool', dest="use_HF", help='condition about using HF model')
 use_HF = parser.parse_args().use_HF
 
 p = Preprocesser(use_HF)
 
-def HF_model():
-    return TFMobileBertForSequenceClassification.from_pretrained(p.MODEL_NAME, from_pt=True, num_labels=p.output_dim)
+class HF_model(tf.keras.Model):
+    def __init__(self, *args, **kwargs):
+        super(HF_model, self).__init__(*args, **kwargs)
+        self.model = TFMobileBertForSequenceClassification.from_pretrained(p.MODEL_NAME, from_pt=True, num_labels=p.output_dim)
+
+    def call(self, inputs, training=None, mask=None):
+        output = self.model(inputs, return_dict=True)
+        return output.logits
 
 def TF_model(order_model: str = "LSTM", use_Bidirectional: bool = False) -> tf.keras.Model:
     assert order_model in ["LSTM", "CNN", "attention"]

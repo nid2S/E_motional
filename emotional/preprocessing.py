@@ -108,7 +108,7 @@ def make_vocab():
 class Preprocesser:
     def __init__(self, use_HF=True):
         self.use_HF = use_HF
-        self.MODEL_NAME = "monologg/koelectra-base-v3-discriminator"
+        self.MODEL_NAME = "snunlp/KR-Medium"
         self.SEED = 1000
         self.vocab = dict([(key, index) for _, (key, index) in pd.read_csv("./data/vocab.txt", sep="\t", encoding="utf-8").iterrows()])
         self.vocab_size = len(self.vocab) + 1
