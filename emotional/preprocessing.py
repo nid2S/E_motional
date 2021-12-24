@@ -115,10 +115,12 @@ class Preprocesser:
         self.id_to_token = dict([(index, key) for _, (key, index) in pd.read_csv("./data/vocab.txt", sep="\t", encoding="utf-8").iterrows()])
         if not use_HF:
             self.tokenizer = Hannanum()
+            self.nor_toknizer = None
             self.input_dim = 55  # train max : 55, val max : 47
         else:
             self.tokenizer = BertTokenizerFast.from_pretrained(self.MODEL_NAME)
-            self.input_dim = 100  # train max : 99, val max : 82
+            self.nor_toknizer = Hannanum()
+            self.input_dim = 70  # train max : 67, val max : 66
         self.output_dim = 11
 
         # hyper parameter
@@ -128,7 +130,7 @@ class Preprocesser:
     def getTrainDataset(self) -> tf.data.Dataset:
         if self.use_HF:
             train_set = pd.read_csv("./data/train.txt", sep="\t", encoding="utf-8").drop(['Unnamed: 0'], axis=1)
-            train_X = train_set["data"].apply(lambda data: re.sub(r"[은는이가을를에게께]", r"", re.sub(r"\W", r" ", data)))
+            train_X = train_set["data"].apply(lambda data: self.tokenize(data, return_string=True))
             train_X = self.tokenizer.batch_encode_plus(train_X.to_list(), max_length=self.input_dim,
                                                        padding="max_length", truncation=True, return_tensors="tf")
             en_train_X = dict()
@@ -149,7 +151,7 @@ class Preprocesser:
     def getValidationDataset(self) -> tf.data.Dataset:
         if self.use_HF:
             val_set = pd.read_csv("./data/val.txt", sep="\t", encoding="utf-8").drop(['Unnamed: 0'], axis=1)
-            val_X = val_set["data"].apply(lambda data: re.sub(r"[은는이가을를에게께]", r"", re.sub(r"\W", r" ", data)))
+            val_X = val_set["data"].apply(lambda data: self.tokenize(data, return_string=True))
             val_X = self.tokenizer.batch_encode_plus(val_X.to_list(), max_length=self.input_dim,
                                                      padding="max_length", truncation=True, return_tensors="tf")
             en_val_X = dict()
@@ -167,11 +169,15 @@ class Preprocesser:
 
             return tf.data.Dataset.from_tensor_slices((val_X.to_list(), val_y)).batch(self.batch_size).shuffle(256, seed=self.SEED)
 
-    def tokenize(self, text: str, return_tensor: bool = True) -> Union[tf.Tensor, List[int]]:
+    def tokenize(self, text: str, return_string: bool = False, return_tensor: bool = True) -> Union[tf.Tensor, List[int], str]:
         if self.use_HF:
-            text = re.sub(r"\W", r" ", text)
-            text = re.sub(r"[은는이가을를에게께]", "", text)
-            return self.tokenizer.encode(text, max_length=self.input_dim, padding="max_length", truncation=True, return_tensors="tf")
+            text = re.sub(r"\W", r" ", text).strip()
+            text = [token for (token, tag) in self.nor_tokenizer.pos(text) if ('N' in tag) or ('P' in tag) or ('F' in tag)]
+            text = " ".join(text)
+            if return_string:
+                return text
+            else:
+                return self.tokenizer.encode(text, max_length=self.input_dim, padding="max_length", truncation=True, return_tensors="tf")
         else:
             # N - 체언 | P - 용언 | F - 외국어
             text = re.sub(r"\W", r" ", text).strip()

@@ -4,7 +4,8 @@
 - 분야를 가리지 않고 데이터를 모아, 전처리를 통해 중요 토큰만 남겨 학습에 사용.
 
 # Model
-- HF : 허깅페이스의 Bert(엘렉트라) 모델을 사용 -> koBert의 토크나이저가 따로 설치가 필요했음 | 엘렉트라의 탓인지 TFLite로의 변환이 불가했음(TFMobile사용에도 불구).
+- HF : 허깅페이스의 Bert(엘렉트라) 모델을 사용 | 엘렉트라의 탓인지 TFLite로의 변환이 불가했음(TFMobile사용에도 불구).
+  -> [snunlp/KR-Medium](https://huggingface.co/snunlp/KR-Medium)
 - TF : KoNLPy의 토크나이저 하나와 LSTM을 사용.
 
 # Data
@@ -33,7 +34,7 @@
   로 변경하니 결론적으로는 해결되었음. 
 
 - 허깅페이스 모델 학습 과정에서 학습 완료 후 tflite로 변환시 변환이 되지 않는 오류가 있었음. -> TFMobileBert로 변경하는 등 다양한 노력이 있었으나, 결국 허깅페이스 사용을 포기함.
-  -> "monologg/koelectra-base-v3-discriminator"모델에서 생긴 오류일거라 추측, 다른 모델로 바꿔 시도해봄(snunlp/KR-Medium 모델 시도). 
+  -> "monologg/koelectra-base-v3-discriminator"모델에서 생긴 오류일거라 추측, 다른 모델로 바꿔 시도해봄. 
 
 - 모델 학습 과정에서 val_accuracy가 0.3193에서 변하지 않는 현상이 발생했음. -> 추후 약간의 변화가 있긴 했으나, 0.001 안팎의 변화였음
   -> 모델의 파라미터가 갱신이 되지 않았다? -> val_loss나 loss, accuracy는 변화했음. | lr이나 모델 파라미터 수정, 추후 트랜스포머로의 교체등의 테스트와 텐서보드의 사용이 필요.

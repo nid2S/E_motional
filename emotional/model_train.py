@@ -16,7 +16,7 @@ p = Preprocesser(use_HF)
 class HF_model(tf.keras.Model):
     def __init__(self, *args, **kwargs):
         super(HF_model, self).__init__(*args, **kwargs)
-        self.model = TFMobileBertForSequenceClassification.from_pretrained(p.MODEL_NAME, from_pt=True, num_labels=p.output_dim)
+        self.model = TFMobileBertForSequenceClassification.from_pretrained(p.MODEL_NAME, num_labels=p.output_dim, from_pt=True)
 
     def call(self, inputs, training=None, mask=None):
         output = self.model(inputs, return_dict=True)
@@ -54,7 +54,7 @@ def TF_model(order_model: str = "LSTM", use_Bidirectional: bool = False) -> tf.k
 # hyper_param
 if use_HF:
     epochs = 4
-    p.batch_size = 32
+    p.batch_size = 8
     model = HF_model()
 else:
     epochs = 150
@@ -64,11 +64,11 @@ else:
 def lr_scheduler(epoch, lr):
     if use_HF:
         if epoch < 2:
-            return 5e-5
+            return 0.1  # 5e-5
         elif epoch < 4:
-            return 3e-5
+            return 0.01  # 3e-5
         else:
-            return 1e-5
+            return 0.001  # 1e-5
     else:
         if epoch < 10:
             return 0.1
