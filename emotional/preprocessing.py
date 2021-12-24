@@ -115,11 +115,11 @@ class Preprocesser:
         self.id_to_token = dict([(index, key) for _, (key, index) in pd.read_csv("./data/vocab.txt", sep="\t", encoding="utf-8").iterrows()])
         if not use_HF:
             self.tokenizer = Hannanum()
-            self.nor_toknizer = None
+            self.nor_tokenizer = None
             self.input_dim = 55  # train max : 55, val max : 47
         else:
             self.tokenizer = BertTokenizerFast.from_pretrained(self.MODEL_NAME)
-            self.nor_toknizer = Hannanum()
+            self.nor_tokenizer = Hannanum()
             self.input_dim = 70  # train max : 67, val max : 66
         self.output_dim = 11
 
