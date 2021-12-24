@@ -34,10 +34,10 @@ def TF_model(order_model: str = "LSTM", use_Bidirectional: bool = False) -> tf.k
         if use_Bidirectional:
             model_layer = tf.keras.layers.Bidirectional(model_layer)
     elif order_model == "CNN":
-        x = tf.keras.layers.Conv1D(32, 4, activation="relu")(x)
+        x = tf.keras.layers.Conv1D(128, 4, activation="relu")(x)
         x = tf.keras.layers.MaxPooling1D(pool_size=2, strides=1)(x)
         x = tf.keras.layers.Dropout(0.3)(x)
-
+        x = tf.keras.layers.Dense(64)(x)
         x = tf.keras.layers.Conv1D(32, 3, activation="relu")(x)
         x = tf.keras.layers.MaxPooling1D(pool_size=2, strides=1)(x)
         model_layer = tf.keras.layers.Dropout(0.3)
@@ -54,7 +54,7 @@ def TF_model(order_model: str = "LSTM", use_Bidirectional: bool = False) -> tf.k
 # hyper_param
 if use_HF:
     epochs = 4
-    p.batch_size = 8
+    p.batch_size = 16
     model = HF_model()
 else:
     epochs = 150
