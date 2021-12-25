@@ -5,7 +5,7 @@
 
 # Model
 - HF : 허깅페이스의 Bert(엘렉트라) 모델을 사용 | 엘렉트라의 탓인지 TFLite로의 변환이 불가했음(TFMobile사용에도 불구).
-  -> [snunlp/KR-Medium](https://huggingface.co/snunlp/KR-Medium)
+  -> [snunlp/KR-Medium](https://huggingface.co/snunlp/KR-Medium) -> 느리고 정확도도 낮음
 - TF : KoNLPy의 토크나이저 하나와 LSTM을 사용.
 
 # Data
