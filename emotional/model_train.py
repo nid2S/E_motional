@@ -97,15 +97,14 @@ else:
                 continue
 
             plt.subplot(3, 4, pos)
-            plt.figure(figsize=(50, 50))
+            plt.figure(figsize=(5, 5))
             pos += 1
 
             model = TF_model(order_model=model_order, use_Bidirectional=(use_Bi == "Bi"))
             model.compile("adam", loss, "accuracy")
             hist = model.fit(p.getTrainDataset(), validation_data=p.getValidationDataset(), batch_size=p.batch_size, epochs=epochs,
-                             callbacks=[EarlyStopping(monitor='val_loss', mode="min", patience=7), LearningRateScheduler(lr_scheduler),
-                                        ModelCheckpoint("./model/"+use_Bi+model_order+"/max_accuracy", monitor="val_accuracy", save_best_only=True),
-                                        ModelCheckpoint("./model/"+use_Bi+model_order+"/min_loss", mode="min", monitor="val_loss", save_best_only=True)])
+                             callbacks=[EarlyStopping(monitor='loss', mode="min", patience=5), LearningRateScheduler(lr_scheduler),
+                                        ModelCheckpoint("./model/"+use_Bi+model_order, monitor="accuracy", save_best_only=True)])
 
             plt.plot(range(1, len(hist.history["loss"])+1), hist.history["loss"], "r", label="loss")
             plt.plot(range(1, len(hist.history["loss"])+1), hist.history["accuracy"], "b", label="accuracy")
