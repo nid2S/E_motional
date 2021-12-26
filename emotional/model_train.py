@@ -101,8 +101,8 @@ else:
             hist = model.fit(p.getTrainDataset(), validation_data=p.getValidationDataset(), batch_size=p.batch_size, epochs=epochs,
                              callbacks=[EarlyStopping(monitor='loss', mode="min", patience=5), LearningRateScheduler(lr_scheduler),
                                         ModelCheckpoint("./model/"+use_Bi+model_order, monitor="accuracy", save_best_only=True)])
-            hist += use_Bi + model_order + "\n"
-            for key, item in hist.items():
-                hist += key + " : " + str(["%.1f" % figure for figure in item]) + "\n"
-            hist += "\n"
+            history += use_Bi + model_order + "\n"
+            for key, item in hist.history.items():
+                history += key + " : " + str(["%.1f" % figure for figure in item]) + "\n"
+            history += "\n"
     open("./model/history.txt", "w+", encoding="utf-8").write(history)
