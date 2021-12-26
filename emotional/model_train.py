@@ -1,7 +1,6 @@
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, LearningRateScheduler, TensorBoard
 from transformers import TFMobileBertForSequenceClassification
 from preprocessing import Preprocesser
-import matplotlib.pyplot as plt
 import tensorflow as tf
 import argparse
 import datetime
@@ -89,6 +88,7 @@ if use_HF:
                                 TensorBoard(log_dir=log_dir, write_graph=True, write_images=True, histogram_freq=1)])
 else:
     pos = 1
+    history = ""
     for model_order in ["LSTM", "CNN", "attention"]:
         for use_Bi in ["", "Bi"]:
             if model_order != "LSTM" and use_Bi == "Bi":
@@ -96,26 +96,13 @@ else:
             if model_order == "attention":
                 continue
 
-            plt.subplot(3, 4, pos)
-            plt.figure(figsize=(5, 5))
-            pos += 1
-
             model = TF_model(order_model=model_order, use_Bidirectional=(use_Bi == "Bi"))
             model.compile("adam", loss, "accuracy")
             hist = model.fit(p.getTrainDataset(), validation_data=p.getValidationDataset(), batch_size=p.batch_size, epochs=epochs,
                              callbacks=[EarlyStopping(monitor='loss', mode="min", patience=5), LearningRateScheduler(lr_scheduler),
                                         ModelCheckpoint("./model/"+use_Bi+model_order, monitor="accuracy", save_best_only=True)])
-
-            plt.plot(range(1, len(hist.history["loss"])+1), hist.history["loss"], "r", label="loss")
-            plt.plot(range(1, len(hist.history["loss"])+1), hist.history["accuracy"], "b", label="accuracy")
-            plt.plot(range(1, len(hist.history["loss"])+1), hist.history["val_loss"], "g", label="val_loss")
-            plt.plot(range(1, len(hist.history["loss"])+1), hist.history["val_accuracy"], "k", label="val_accuracy")
-            plt.title(use_Bi+model_order)
-            plt.text(1, 3, "max val_acc : %.1f" % max(hist.history["val_accuracy"]))
-            plt.text(1, 6, "min val_loss : %.1f" % min(hist.history["val_loss"]))
-            plt.xlabel("epoch")
-            plt.ylabel("loss/accuracy")
-            plt.xticks(range(1, len(hist.history["loss"])+1))
-            plt.xlim(0.9, len(hist.history["loss"])+0.1)
-        plt.legend()
-        plt.savefig("./history.png")
+            hist += use_Bi + model_order + "\n"
+            for key, item in hist.items():
+                hist += key + " : " + str(["%.1f" % figure for figure in item]) + "\n"
+            hist += "\n"
+    open("./model/history.txt", "w+", encoding="utf-8").write(history)
