@@ -103,6 +103,6 @@ else:
                                         ModelCheckpoint("./model/"+use_Bi+model_order, monitor="accuracy", save_best_only=True)])
             history += use_Bi + model_order + "\n"
             for key, item in hist.history.items():
-                history += key + " : " + str(["%.1f" % figure for figure in item]) + "\n"
+                history += key + " : " + str(["%.3f" % figure for figure in item]) + "\n"
             history += "\n"
     open("./model/history.txt", "w+", encoding="utf-8").write(history)
