@@ -8,7 +8,7 @@
 # Data
 - [멀티모달 영상](https://aihub.or.kr/aidata/137)
 - [감성대화 말뭉치](https://aihub.or.kr/aidata/7978)
-- +α
+- 전처리 : (?) | 안드로이드 환경에서도 사용할 수 있게(API로 전달할 수 도 있지만)고민
 
 # Model
 - 먼저 간단한 RNN기반 모델을 PL로 제작한 뒤, CNN기반, Attention + S2S, Transformer등도 제작해봄. 
