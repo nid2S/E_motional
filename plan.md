@@ -12,3 +12,4 @@
 
 # Model
 - 먼저 간단한 RNN기반 모델을 PL로 제작한 뒤, CNN기반, Attention + S2S, Transformer등도 제작해봄. 
+- HuggingFace 사용도 고려.
