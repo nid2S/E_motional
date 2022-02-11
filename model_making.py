@@ -6,6 +6,11 @@ import pytorch_lightning as pl
 from konlpy.tag import Hannanum
 import pandas as pd
 import re
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument('-h', type=bool, default=False, dest="use_hf", help='condition of using HuggingFace Model')
+args = parser.parse_args()
 
 class EmotionClassification(LightningModule):
     def __init__(self):
@@ -47,7 +52,9 @@ class EmotionClassification(LightningModule):
         return torch.nn.CrossEntropyLoss()(output, labels, ignore_index=self.pad_token_id)
 
     def accuracy(self, output, labels):
-        pass
+        self.parameters()
+        output = torch.argmax(output, dim=1)
+        return torch.sum(output == labels) / output.__len__() * 100  # %(Precentage)
 
     def prepare_data(self):
         raw_train = pd.read_csv("./data/train.txt", sep="\t", encoding="utf-8", index_col=0)
