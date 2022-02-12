@@ -16,6 +16,7 @@ class EmotionClassification(LightningModule):
     def __init__(self):
         super(EmotionClassification, self).__init__()
 
+        self.use_hf = args.use_hf
         self.RANDOM_SEED = 7777
         self.train_set = None
         self.val_set = None
@@ -85,33 +86,40 @@ class EmotionClassification(LightningModule):
         x, y = batch
         y_pred = self(x)
         loss = self.cross_entropy_loss(y_pred, y)
+        accuracy = self.accuracy(y_pred, y)
 
-        logs = {'train_loss': loss}
-        return {'loss': loss, 'log': logs}
+        logs = {'train_loss': loss, 'train_acc': accuracy}
+        return {'loss': loss, 'accuracy': accuracy, 'log': logs}
 
     def validation_step(self, batch, batch_idx):
         x, y = batch
         y_pred = self(x)
         loss = self.cross_entropy_loss(y_pred, y)
+        accuracy = self.accuracy(y_pred, y)
 
-        return {'val_loss': loss}
+        logs = {'val_loss': loss, 'val_acc': accuracy}
+        return {'loss': loss, 'accuracy': accuracy, 'log': logs}
 
     def validation_epoch_end(self, outputs):
         mean_loss = torch.stack([output['val_loss'] for output in outputs]).mean()
-        logs = {'val_loss': mean_loss}
-        return {'avg_val_loss': mean_loss, 'log': logs}
+        mean_acc = torch.stack([output['val_acc'] for output in outputs]).mean()
+        logs = {'val_loss': mean_loss, 'val_acc': mean_acc}
+        return {'avg_val_loss': mean_loss, 'avg_val_acc': mean_acc, 'log': logs}
 
     def test_step(self, batch, batch_idx):
         x, y = batch
         y_pred = self(x)
         loss = self.cross_entropy_loss(y_pred, y)
+        accuracy = self.accuracy(y_pred, y)
 
-        return {'test_loss': loss}
+        logs = {'test_loss': loss, 'test_acc': accuracy}
+        return {'loss': loss, 'accuracy': accuracy, 'log': logs}
 
     def test_epoch_end(self, outputs):
         mean_loss = torch.stack([output['test_loss'] for output in outputs]).mean()
-        logs = {'test_loss': mean_loss}
-        return {'avg_test_loss': mean_loss, 'log': logs}
+        mean_acc = torch.stack([output['test_acc'] for output in outputs]).mean()
+        logs = {'test_loss': mean_loss, 'test_acc': mean_acc}
+        return {'avg_test_loss': mean_loss, 'avg_test_acc': mean_acc, 'log': logs}
 
     def tokenize(self, text):
         # N - 체언 | P - 용언 | F - 외국어
