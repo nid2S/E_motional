@@ -1,5 +1,7 @@
 from sklearn.model_selection import train_test_split
+from konlpy.tag import Hannanum
 import pandas as pd
+import re
 
 def change_dataset():
     train = pd.read_csv("./data/train.txt", sep="\t", encoding="utf-8").drop(["Unnamed: 0"], axis=1)
@@ -25,3 +27,28 @@ def make_testset():
     train.to_csv("./data/train.txt", sep="\t", encoding="utf-8")
     val.to_csv("./data/val.txt", sep="\t", encoding="utf-8")
     test.to_csv("./data/test.txt", sep="\t", encoding="utf-8")
+
+def make_vocab():
+    CUTTING_RATE = 0.7
+
+    tokenizer = Hannanum()
+    vocab = dict()
+
+    train = pd.read_csv("./data/train.txt", sep="\t", index_col=0, encoding="utf-8")
+    val = pd.read_csv("./data/val.txt", sep="\t", index_col=0, encoding="utf-8")
+    test = pd.read_csv("./data/test.txt", sep="\t", index_col=0, encoding="utf-8")
+    data = pd.concat([train, val, test], axis=0)
+
+    for text in data["data"].values:
+        text = re.sub(r"\W", r" ", text).strip()
+        tokens = [token for (token, tag) in tokenizer.pos(text) if ('N' in tag) or ('P' in tag) or ('F' in tag)]
+        for token in tokens:
+            try:
+                vocab[token] += 1
+            except KeyError:
+                vocab[token] = 1
+
+    vocab_df = pd.DataFrame.from_dict({'token': vocab.keys(), 'count': vocab.values()})
+    vocab_df.sort_values(["count"], inplace=True, ignore_index=True)
+    vocab_df = vocab_df.iloc[:len(vocab_df)*CUTTING_RATE]
+    vocab_df.to_csv("./data/vocab.txt", sep="\t", encoding='utf-8')
