@@ -12,8 +12,3 @@
 
 # Model
 - 먼저 간단한 RNN기반 모델을 PL로 제작한 뒤, CNN기반, Attention + S2S, Transformer등도 제작해봄. 
-
-# TODO
-- accuracy
-- vocab 재구축(빈도수 낮은 단어 제거)
-- 허깅페이스 사용
