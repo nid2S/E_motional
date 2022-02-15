@@ -29,6 +29,7 @@ def make_testset():
     test.to_csv("./data/test.txt", sep="\t", encoding="utf-8")
 
 def make_vocab():
+    print("making vocab started")
     CUTTING_RATE = 0.7
 
     tokenizer = Hannanum()
@@ -47,8 +48,15 @@ def make_vocab():
                 vocab[token] += 1
             except KeyError:
                 vocab[token] = 1
+    print("tokenizing ended")
 
-    vocab_df = pd.DataFrame.from_dict({'token': vocab.keys(), 'count': vocab.values()})
-    vocab_df.sort_values(["count"], inplace=True, ignore_index=True)
-    vocab_df = vocab_df.iloc[:len(vocab_df)*CUTTING_RATE]
-    vocab_df.to_csv("./data/vocab.txt", sep="\t", encoding='utf-8')
+    vocab = pd.DataFrame.from_dict({'token': vocab.keys(), 'count': vocab.values()})
+    vocab.sort_values(["count"], inplace=True, ignore_index=True)
+    vocab = vocab.iloc[:int(len(vocab)*CUTTING_RATE)]
+    print("sort and cutting ended")
+
+    vocab = vocab.drop(["count"], axis=1)
+    vocab["index"] = range(2, len(vocab)+2)
+    vocab = pd.concat([pd.DataFrame([["<oov>", 0], ["<pad>", 1]], columns=["token", "index"]), vocab], ignore_index=True)
+    vocab.to_csv("./data/vocab.txt", sep="\t", encoding='utf-8')
+    print("making vocab finished")
