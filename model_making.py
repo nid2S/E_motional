@@ -2,7 +2,7 @@ import setuptools
 from torch.utils.data import TensorDataset, DataLoader
 import torch
 from pytorch_lightning import LightningModule, Trainer
-from pytorch_lightning.callbacks import ModelCheckpoint, early_stopping
+from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 import pytorch_lightning as pl
 from konlpy.tag import Hannanum
 from transformers import BertForSequenceClassification, BertTokenizerFast
@@ -11,7 +11,7 @@ import argparse
 import re
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-h', type=bool, default=False, dest="use_hf", help='condition of using HuggingFace Model')
+parser.add_argument('-hf', type=bool, default=False, dest="use_hf", help='condition of using HuggingFace Model')
 args = parser.parse_args()
 
 class EmotionClassification(LightningModule):
@@ -32,14 +32,15 @@ class EmotionClassification(LightningModule):
         self.num_labels = 7
 
         self.tokenizer = Hannanum()
-        self.vocab = dict([(key, index) for _, (key, index) in pd.read_csv("./data/vocab.txt", sep="\t", encoding="utf-8").iterrows()])
-        self.id_to_token = dict([(index, key) for key, index in self.vocab.items()])
+        self.vocab = dict([(token, index) for _, (token, index) in pd.read_csv("./data/vocab.txt", sep="\t", index_col=0, encoding="utf-8").iterrows()])
+        self.id_to_token = dict([(index, token) for token, index in self.vocab.items()])
         self.vocab_size = len(self.vocab) + 1  # 76066
-        self.pad_token_id = self.vocab['<pad>']  # 0
+        self.pad_token_id = self.vocab['<pad>']  # 1
 
         self.fc1 = torch.nn.Linear(self.input_dim, 64)
-        self.LSTM = torch.nn.LSTM((self.batch_size, 64), 32, num_layers=3, batch_first=True)
+        self.LSTM = torch.nn.LSTM(64, 32, num_layers=3)
         self.h_0 = torch.randn((self.batch_size, 32))
+        self.c_0 = torch.randn((self.batch_size, 32))
         self.fc2 = torch.nn.Linear(32, self.num_labels)
         self.model = None
 
@@ -59,7 +60,7 @@ class EmotionClassification(LightningModule):
             y = output.logits
         else:
             x = self.fc1(x)
-            x = self.LSTM(x, self.h_0)
+            x, (h_n, c_n) = self.LSTM(x, (self.h_0, self.c_0))
             y = self.fc2(x)
         return y
 
@@ -76,12 +77,6 @@ class EmotionClassification(LightningModule):
         raw_val = pd.read_csv("./data/val.txt", sep="\t", encoding="utf-8", index_col=0)
         raw_test = pd.read_csv("./data/test.txt", sep="\t", encoding="utf-8", index_col=0)
 
-        raw_train["data"] = raw_train["data"].apply(lambda x: self.tokenize(x))
-        raw_val["data"] = raw_val["data"].apply(lambda x: self.tokenize(x))
-        raw_test["data"] = raw_test["data"].apply(lambda x: self.tokenize(x))
-        raw_train["label"] = raw_train["label"].apply(lambda x: torch.LongTensor([x]))
-        raw_val["label"] = raw_val["label"].apply(lambda x: torch.LongTensor([x]))
-        raw_test["label"] = raw_test["label"].apply(lambda x: torch.LongTensor([x]))
 
         self.train_set = TensorDataset(raw_train["data"], raw_train["label"])
         self.val_set = TensorDataset(raw_val["data"], raw_val["label"])
@@ -136,22 +131,22 @@ class EmotionClassification(LightningModule):
         return {'avg_test_loss': mean_loss, 'avg_test_acc': mean_acc, 'log': logs}
 
     def tokenize(self, text):
-        if self.USE_HF:
-            return self.tokenizer(text, padding="max_length", truncation=True, max_length=self.input_dim, return_tensors="pt")["input_ids"]
-        else:
-            # N - 체언 | P - 용언 | F - 외국어
-            text = re.sub(r"\W", r" ", text).strip()
-            text = [token for (token, tag) in self.tokenizer.pos(text) if ('N' in tag) or ('P' in tag) or ('F' in tag)]
-            for i, token in enumerate(text):
-                text[i] = self.vocab[token] if token in self.vocab else self.vocab['<oov>']
-            text = [text + [0] * (self.input_dim - len(text))][:self.input_dim]
-            return torch.FloatTensor(text)
+        # N - 체언 | P - 용언 | F - 외국어
+        text = re.sub(r"\W", r" ", text).strip()
+        text = [token for (token, tag) in self.tokenizer.pos(text) if ('N' in tag) or ('P' in tag) or ('F' in tag)]
+        for i, token in enumerate(text):
+            text[i] = self.vocab[token] if token in self.vocab else self.vocab['<oov>']
+        text = text + [0] * (self.input_dim - len(text))
+        text = text[:self.input_dim]
+        return torch.FloatTensor(text)
 
 
 epochs = 4 if args.use_hf else 100
 dir_name = "hf_model" if args.use_hf else "pl_model"
 model = EmotionClassification()
-trainer = Trainer(max_epochs=epochs, gpus=torch.cuda.device_count(), callbacks=[])
+trainer = Trainer(max_epochs=epochs, gpus=torch.cuda.device_count(),
+                  callbacks=[ModelCheckpoint("./model/"+dir_name+"/check_point/", verbose=True, save_top_k=3, monitor="val_acc", mode="max"),
+                             EarlyStopping(monitor="val_loss", mode="min", patience=3)])
 
 trainer.fit(model)
 torch.save(model.state_dict(), "./model/" + dir_name + "/torch_model.pt")
