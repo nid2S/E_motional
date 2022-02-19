@@ -17,25 +17,26 @@ args = parser.parse_args()
 class EmotionClassification(LightningModule):
     def __init__(self):
         super(EmotionClassification, self).__init__()
-
-        self.USE_HF = args.use_hf
         self.RANDOM_SEED = 7777
-        self.train_set = None
-        self.val_set = None
-        self.test_set = None
         torch.manual_seed(self.RANDOM_SEED)
         torch.cuda.manual_seed(self.RANDOM_SEED)
         pl.seed_everything(self.RANDOM_SEED)
 
+        self.USE_HF = args.use_hf
+        self.train_set = None
+        self.val_set = None
+        self.test_set = None
+
+        self.learning_rate = 0.1
+        self.num_labels = 7
         self.batch_size = 32
         self.input_dim = 55
-        self.num_labels = 7
 
         self.tokenizer = Hannanum()
         self.vocab = dict([(token, index) for _, (token, index) in pd.read_csv("./data/vocab.txt", sep="\t", index_col=0, encoding="utf-8").iterrows()])
         self.id_to_token = dict([(index, token) for token, index in self.vocab.items()])
-        self.vocab_size = len(self.vocab) + 1  # 76066
-        self.pad_token_id = self.vocab['<pad>']  # 1
+        self.vocab_size = len(self.vocab) + 1
+        self.pad_token_id = self.vocab['<pad>']  # 0
 
         self.fc1 = torch.nn.Linear(self.input_dim, 64)
         self.LSTM = torch.nn.LSTM(64, 32, num_layers=3)
@@ -48,6 +49,7 @@ class EmotionClassification(LightningModule):
             self.model = BertForSequenceClassification.from_pretrained("Huffon/klue-roberta-base-nli", num_labels=self.num_labels)
             self.tokenizer = BertTokenizerFast.from_pretrained("Huffon/klue-roberta-base-nli")
             self.pad_token_id = self.tokenizer.pad_token_id
+            self.learning_rate = 3e-5
             self.input_dim = 125
 
     def configure_optimizers(self):
@@ -77,10 +79,25 @@ class EmotionClassification(LightningModule):
         raw_val = pd.read_csv("./data/val.txt", sep="\t", encoding="utf-8", index_col=0)
         raw_test = pd.read_csv("./data/test.txt", sep="\t", encoding="utf-8", index_col=0)
 
+        train_Y = torch.LongTensor(raw_train["label"].to_list())
+        val_Y = torch.LongTensor(raw_val["label"].to_list())
+        test_Y = torch.LongTensor(raw_test["label"].to_list())
 
-        self.train_set = TensorDataset(raw_train["data"], raw_train["label"])
-        self.val_set = TensorDataset(raw_val["data"], raw_val["label"])
-        self.test_set = TensorDataset(raw_test["data"], raw_test["label"])
+        if self.USE_HF:
+            train_x = self.tokenizer.batch_encode_plus(raw_train["data"].to_list(), return_tensors="pt",
+                                                       max_length=self.max_len, padding="max_length", truncation=True)["input_ids"]
+            val_x = self.tokenizer.batch_encode_plus(raw_val["data"].to_list(), return_tensors="pt",
+                                                     max_length=self.max_len, padding="max_length", truncation=True)["input_ids"]
+            test_x = self.tokenizer.batch_encode_plus(raw_test["data"].to_list(), return_tensors="pt",
+                                                      max_length=self.max_len, padding="max_length", truncation=True)["input_ids"]
+        else:
+            train_x = torch.FloatTensor(raw_train["data"].apply(lambda x: self.tokenize(x, return_tensor=False)).to_list())
+            val_x = torch.FloatTensor(raw_val["data"].apply(lambda x: self.tokenize(x, return_tensor=False)).to_list())
+            test_x = torch.FloatTensor(raw_test["data"].apply(lambda x: self.tokenize(x, return_tensor=False)).to_list())
+
+        self.train_set = TensorDataset(train_x, train_Y)
+        self.val_set = TensorDataset(val_x, val_Y)
+        self.test_set = TensorDataset(test_x, test_Y)
 
     def train_dataloader(self):
         return DataLoader(self.train_set, batch_size=self.batch_size, shuffle=True)
@@ -130,15 +147,18 @@ class EmotionClassification(LightningModule):
         logs = {'test_loss': mean_loss, 'test_acc': mean_acc}
         return {'avg_test_loss': mean_loss, 'avg_test_acc': mean_acc, 'log': logs}
 
-    def tokenize(self, text):
-        # N - 체언 | P - 용언 | F - 외국어
-        text = re.sub(r"\W", r" ", text).strip()
-        text = [token for (token, tag) in self.tokenizer.pos(text) if ('N' in tag) or ('P' in tag) or ('F' in tag)]
-        for i, token in enumerate(text):
-            text[i] = self.vocab[token] if token in self.vocab else self.vocab['<oov>']
-        text = text + [0] * (self.input_dim - len(text))
-        text = text[:self.input_dim]
-        return torch.FloatTensor(text)
+    def tokenize(self, text, return_tensor: bool = True):
+        if self.USE_HF:
+            self.tokenizer.encode(text, max_length=self.input_dim, padding="max_length", truncation=True, return_tensors="pt")
+        else:
+            # N - 체언 | P - 용언 | F - 외국어
+            text = re.sub(r"\W", r" ", text).strip()
+            text = [token for (token, tag) in self.tokenizer.pos(text) if ('N' in tag) or ('P' in tag) or ('F' in tag)]
+            for i, token in enumerate(text):
+                text[i] = self.vocab[token] if token in self.vocab else self.vocab['<oov>']
+            text = text + [self.pad_token_id] * (self.input_dim - len(text))
+            text = text[:self.input_dim]
+            return torch.FloatTensor(text) if return_tensor else text
 
 
 epochs = 4 if args.use_hf else 100
