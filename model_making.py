@@ -32,6 +32,7 @@ class EmotionClassification(LightningModule):
         self.num_labels = 7
         self.batch_size = 32
         self.input_dim = 55
+        self.embedding_size = 128
         self.hidden_size = 64
 
         self.tokenizer = Hannanum()
@@ -40,9 +41,8 @@ class EmotionClassification(LightningModule):
         self.vocab_size = len(self.vocab) + 1
         self.pad_token_id = self.vocab['<pad>']  # 0
 
-        self.LSTM = torch.nn.LSTM(self.vocab_size, self.hidden_size, num_layers=self.num_layers, batch_first=True, dropout=0.3)
-        self.h_0 = torch.zeros(self.num_layers, self.batch_size, self.hidden_size, requires_grad=True)
-        self.c_0 = torch.zeros(self.num_layers, self.batch_size, self.hidden_size, requires_grad=True)
+        self.embedding = torch.nn.Embedding(self.input_dim, self.embedding_size, padding_idx=self.pad_token_id)
+        self.LSTM = torch.nn.LSTM(self.embedding_size, self.hidden_size, num_layers=self.num_layers, batch_first=True, dropout=0.3)
         self.fc = torch.nn.Linear(self.hidden_size, self.num_labels)
         self.model = None
 
@@ -62,7 +62,10 @@ class EmotionClassification(LightningModule):
             output = self.model(x)
             y = output.logits
         else:
-            x, (h_n, c_n) = self.LSTM(x, (self.h_0, self.c_0))
+            x = self.embedding(x)
+            h_0 = torch.zeros(self.num_layers, self.batch_size, self.hidden_size, requires_grad=True)
+            c_0 = torch.zeros(self.num_layers, self.batch_size, self.hidden_size, requires_grad=True)
+            x, (h_n, c_n) = self.LSTM(x, (h_0, c_0))
             y = self.fc(x)
         return y
 
@@ -91,9 +94,9 @@ class EmotionClassification(LightningModule):
             test_x = self.tokenizer.batch_encode_plus(raw_test["data"].to_list(), return_tensors="pt",
                                                       max_length=self.max_len, padding="max_length", truncation=True)["input_ids"]
         else:
-            train_x = torch.FloatTensor(raw_train["data"].apply(lambda x: torch.eye(self.vocab_size)[self.tokenize(x, return_tensor=False)]).to_list())
-            val_x = torch.FloatTensor(raw_val["data"].apply(lambda x: torch.eye(self.vocab_size)[self.tokenize(x, return_tensor=False)]).to_list())
-            test_x = torch.FloatTensor(raw_test["data"].apply(lambda x: torch.eye(self.vocab_size)[self.tokenize(x, return_tensor=False)]).to_list())
+            train_x = torch.FloatTensor(raw_train["data"].apply(lambda x: self.tokenize(x, return_tensor=False)).to_list())
+            val_x = torch.FloatTensor(raw_val["data"].apply(lambda x: self.tokenize(x, return_tensor=False)).to_list())
+            test_x = torch.FloatTensor(raw_test["data"].apply(lambda x: self.tokenize(x, return_tensor=False)).to_list())
 
         self.train_set = TensorDataset(train_x, train_Y)
         self.val_set = TensorDataset(val_x, val_Y)
