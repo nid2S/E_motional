@@ -66,6 +66,7 @@ class EmotionClassification(LightningModule):
             h_0 = torch.zeros(self.num_layers, self.batch_size, self.hidden_size, requires_grad=True)
             c_0 = torch.zeros(self.num_layers, self.batch_size, self.hidden_size, requires_grad=True)
             x, (h_n, c_n) = self.LSTM(x, (h_0, c_0))
+            x = x.view(-1, self.hidden_size)
             y = self.fc(x)
         return y
 
