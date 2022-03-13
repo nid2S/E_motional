@@ -11,7 +11,7 @@ from pytorch_lightning import LightningModule, Trainer
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping, LearningRateMonitor
 from transformers.optimization import get_cosine_schedule_with_warmup
-from transformers import GPT2TokenizerFast
+from transformers import ElectraTokenizerFast
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-e", type=int, default=50, dest="epochs", help="num of epochs")
@@ -58,12 +58,13 @@ class EmotionClassifier(LightningModule):
         self.warmup_ratio = hparams.warmup_ratio
 
         self.num_labels = 7
-        self.input_dim = None
+        self.input_dim = 125  # train-125, val-107, test-91
 
-        self.label_dict = None
-        self.train_set = None
-        self.val_set = None
-        self.tokenizer = None
+        self.label_dict = {0: "기쁨", 1: "분노", 2: "슬픔", 3: "불안", 4: "놀람", 5: "혐오", 6: "중립"}
+        self.train_set = None  # 78262
+        self.val_set = None  # 32020
+        self.test_set = None  # 12254
+        self.tokenizer = ElectraTokenizerFast.from_pretrained("monologg/koelectra-base-v3-discriminator")
         self.pad_token_id = self.tokenizer.pad_token_id
 
         self.embedding_layer = torch.nn.Sequential(
@@ -111,14 +112,24 @@ class EmotionClassifier(LightningModule):
         return output
 
     def loss(self, output, labels):
-        return torch.nn.CrossEntropyLoss()(output, labels)
+        return torch.nn.CrossEntropyLoss(ignore_index=self.pad_token_id)(output, labels)
 
     def accuracy(self, output, labels):
         output = torch.argmax(output, dim=1)
         return torch.sum(output == labels) / output.__len__() * 100  # %(Precentage)
 
     def prepare_data(self):
-        pass  # TODO
+        train = pd.read_csv("./data/train.txt", sep="\t", encoding="utf-8", index_col=0)
+        val = pd.read_csv("./data/val.txt", sep="\t", encoding="utf-8", index_col=0)
+        test = pd.read_csv("./data/test.txt", sep="\t", encoding="utf-8", index_col=0)
+        data_list = []
+        for data in [train, val, test]:
+            x = self.tokenizer.batch_encode_plus(data['data'].to_list(), max_length=self.input_dim, padding="max_langth", return_tensors="pt")
+            Y = torch.LongTensor(data['label'])
+            data_list.append((x['input_ids'], Y))
+        self.train_set = TensorDataset(data_list[0][0], data_list[0][1])
+        self.val_set = TensorDataset(data_list[1][0], data_list[1][1])
+        self.test_set = TensorDataset(data_list[2][0], data_list[2][1])
 
     def train_dataloader(self):
         return DataLoader(self.train_set, batch_size=self.batch_size, shuffle=True, drop_last=True)
@@ -154,7 +165,7 @@ class EmotionClassifier(LightningModule):
 
 
 args = parser.parse_args()
-model = LabelClassifier(args)
+model = EmotionClassifier(args)
 trainer = Trainer(max_epochs=args.epochs, gpus=torch.cuda.device_count(), logger=TensorBoardLogger("./model/tensorboardLog/"))
 trainer.fit(model)
-torch.save(model.state_dict(), f"./model/model_state.pt")
+torch.save(model.state_dict(), "./model/model_state.pt")
