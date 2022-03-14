@@ -10,7 +10,7 @@ from torch.utils.data import TensorDataset, DataLoader
 from pytorch_lightning import LightningModule, Trainer
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping, LearningRateMonitor
-from transformers.optimization import get_cosine_schedule_with_warmup
+from torch.optim.lr_scheduler import ExponentialLR
 from transformers import ElectraTokenizerFast
 
 parser = argparse.ArgumentParser()
@@ -19,9 +19,9 @@ parser.add_argument("-b", type=int, default=32, dest="batch_size", help="size of
 parser.add_argument("-hd", type=int, default=256, dest="hidden_size", help="size of hidden_state")
 parser.add_argument("-l", type=int, default=12, dest="num_layers", help="num of transfomer model encoder layers")
 parser.add_argument("-p", type=int, default=5, dest="patience", help="number of check with no improved")
-parser.add_argument("-lr", type=float, default=0.01, dest="learning_rate", help="learning rate")
+parser.add_argument("-lr", type=float, default=0.1, dest="learning_rate", help="learning rate")
 parser.add_argument("-dr", type=float, default=0.1, dest="dropout_rate", help="dropout rate")
-parser.add_argument("-wr", type=float, default=0.05, dest="warmup_ratio", help="warmup rate")
+parser.add_argument("-gamma", type=float, default=0.9, dest="gamma", help="decay rate of learning_rate on each epoch")
 parser.add_argument("--embedding-size", type=int, default=512, dest="embedding_size", help="size of embedding vector")
 
 class PositionalEncoding(torch.nn.Module):
@@ -55,7 +55,6 @@ class EmotionClassifier(LightningModule):
         self.patience = hparams.patience
         self.learning_rate = hparams.learning_rate
         self.dropout_rate = hparams.dropout_rate
-        self.warmup_ratio = hparams.warmup_ratio
 
         self.num_labels = 7
         self.input_dim = 125  # train-125, val-107, test-91
@@ -87,10 +86,8 @@ class EmotionClassifier(LightningModule):
     def configure_optimizers(self):
         optim = AdamW(self.parameters(), lr=self.learning_rate, weight_decay=0.1)
 
-        num_train_steps = len(self.train_dataloader()) * self.epochs
-        num_warmup_steps = int(num_train_steps * self.warmup_ratio)
-        scheduler = get_cosine_schedule_with_warmup(optim, num_warmup_steps=num_warmup_steps, num_training_steps=num_train_steps)
-        lr_scheduler = {'scheduler': scheduler, 'name': 'cosine_schedule_with_warmup', 'monitor': 'loss', 'interval': 'step', 'frequency': 1}
+        scheduler = ExponentialLR(optim, gamma=self.gamma)
+        lr_scheduler = {'scheduler': scheduler, 'name': 'Exponential', 'monitor': 'loss', 'interval': 'step', 'frequency': 1}
         return [optim], [lr_scheduler]
 
     def configure_callbacks(self):
