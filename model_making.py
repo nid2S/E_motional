@@ -16,7 +16,7 @@ from transformers import ElectraTokenizerFast
 parser = argparse.ArgumentParser()
 parser.add_argument("-e", type=int, default=50, dest="epochs", help="num of epochs")
 parser.add_argument("-b", type=int, default=32, dest="batch_size", help="size of each batch")
-parser.add_argument("-h", type=int, default=256, dest="hidden_size", help="size of hidden_state")
+parser.add_argument("-hd", type=int, default=256, dest="hidden_size", help="size of hidden_state")
 parser.add_argument("-l", type=int, default=12, dest="num_layers", help="num of transfomer model encoder layers")
 parser.add_argument("-p", type=int, default=5, dest="patience", help="number of check with no improved")
 parser.add_argument("-lr", type=float, default=0.01, dest="learning_rate", help="learning rate")
@@ -67,12 +67,7 @@ class EmotionClassifier(LightningModule):
         self.tokenizer = ElectraTokenizerFast.from_pretrained("monologg/koelectra-base-v3-discriminator")
         self.pad_token_id = self.tokenizer.pad_token_id
 
-        self.embedding_layer = torch.nn.Sequential(
-            torch.nn.Embedding(self.tokenizer.vocab_size, self.embedding_size, self.pad_token_id),
-            torch.nn.Linear(self.embedding_size, self.embedding_size),
-            torch.nn.ELU(),
-            torch.nn.LayerNorm(self.embedding_size, eps=1e-5, elementwise_affine=True)
-        )
+        self.embedding_layer = torch.nn.Embedding(self.tokenizer.vocab_size, self.embedding_size, self.pad_token_id)
         transformerEncoder_layer = torch.nn.TransformerEncoderLayer(self.embedding_size, 8, dropout=self.dropout_rate, batch_first=True)
         self.transformerEncoder = torch.nn.Sequential(
             PositionalEncoding(self.embedding_size, self.input_dim, self.dropout_rate),
@@ -124,7 +119,7 @@ class EmotionClassifier(LightningModule):
         test = pd.read_csv("./data/test.txt", sep="\t", encoding="utf-8", index_col=0)
         data_list = []
         for data in [train, val, test]:
-            x = self.tokenizer.batch_encode_plus(data['data'].to_list(), max_length=self.input_dim, padding="max_langth", return_tensors="pt")
+            x = self.tokenizer.batch_encode_plus(data['data'].to_list(), max_length=self.input_dim, padding="max_length", return_tensors="pt")
             Y = torch.LongTensor(data['label'])
             data_list.append((x['input_ids'], Y))
         self.train_set = TensorDataset(data_list[0][0], data_list[0][1])
