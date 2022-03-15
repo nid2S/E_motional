@@ -17,7 +17,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("-e", type=int, default=50, dest="epochs", help="num of epochs")
 parser.add_argument("-b", type=int, default=32, dest="batch_size", help="size of each batch")
 parser.add_argument("-hd", type=int, default=256, dest="hidden_size", help="size of hidden_state")
-parser.add_argument("-l", type=int, default=12, dest="num_layers", help="num of transfomer model encoder layers")
+parser.add_argument("-l", type=int, default=6, dest="num_layers", help="num of transfomer model encoder layers")
 parser.add_argument("-p", type=int, default=5, dest="patience", help="number of check with no improved")
 parser.add_argument("-lr", type=float, default=0.1, dest="learning_rate", help="learning rate")
 parser.add_argument("-dr", type=float, default=0.1, dest="dropout_rate", help="dropout rate")
@@ -53,6 +53,7 @@ class EmotionClassifier(LightningModule):
         self.hidden_size = hparams.hidden_size
         self.num_layers = hparams.num_layers
         self.patience = hparams.patience
+        self.gamma = hparams.gamma
         self.learning_rate = hparams.learning_rate
         self.dropout_rate = hparams.dropout_rate
 
