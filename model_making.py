@@ -1,11 +1,10 @@
 import setuptools
-import re
 import torch
 import math
 import pandas as pd
 import argparse
 import pytorch_lightning as pl
-from torch.optim import AdamW
+from torch.functional import F
 from torch.utils.data import TensorDataset, DataLoader
 from pytorch_lightning import LightningModule, Trainer
 from pytorch_lightning.loggers import TensorBoardLogger
@@ -23,6 +22,17 @@ parser.add_argument("-lr", type=float, default=0.1, dest="learning_rate", help="
 parser.add_argument("-dr", type=float, default=0.1, dest="dropout_rate", help="dropout rate")
 parser.add_argument("-gamma", type=float, default=0.9, dest="gamma", help="decay rate of learning_rate on each epoch")
 parser.add_argument("--embedding-size", type=int, default=512, dest="embedding_size", help="size of embedding vector")
+
+class InputMonitor(pl.Callback):
+    def __init__(self):
+        super(InputMonitor, self).__init__()
+
+    def on_train_batch_start(self, trainer, pl_module, batch, batch_idx: int, unused=0) -> None:
+        if (batch_idx + 1) % trainer.log_every_n_steps == 0:
+            x, y = batch
+            logger = trainer.logger
+            logger.experiment.add_histogram("input", x, global_step=trainer.global_step)
+            logger.experiment.add_histogram("target", y, global_step=trainer.global_step)
 
 class PositionalEncoding(torch.nn.Module):
     def __init__(self, model_dim, input_dim, dropout_rate):
@@ -68,24 +78,30 @@ class EmotionClassifier(LightningModule):
         self.pad_token_id = self.tokenizer.pad_token_id
 
         self.embedding_layer = torch.nn.Embedding(self.tokenizer.vocab_size, self.embedding_size, self.pad_token_id)
-        transformerEncoder_layer = torch.nn.TransformerEncoderLayer(self.embedding_size, 8, dropout=self.dropout_rate, batch_first=True)
-        self.transformerEncoder = torch.nn.Sequential(
-            PositionalEncoding(self.embedding_size, self.input_dim, self.dropout_rate),
-            torch.nn.TransformerEncoder(transformerEncoder_layer, self.num_layers, norm=torch.nn.LayerNorm(self.embedding_size, eps=1e-5, elementwise_affine=True))
-        )
-        self.model_output_layer = torch.nn.Sequential(
-            torch.nn.Linear(self.embedding_size, self.hidden_size),
-            torch.nn.ELU(),
-            torch.nn.LayerNorm(self.hidden_size, eps=1e-5, elementwise_affine=True),
-            torch.nn.Dropout(self.dropout_rate)
-        )
+        # transformerEncoder_layer = torch.nn.TransformerEncoderLayer(self.embedding_size, 8, dropout=self.dropout_rate, batch_first=True)
+        # self.transformerEncoder = torch.nn.Sequential(
+        #     PositionalEncoding(self.embedding_size, self.input_dim, self.dropout_rate),
+        #     torch.nn.TransformerEncoder(transformerEncoder_layer, self.num_layers, norm=torch.nn.LayerNorm(self.embedding_size, eps=1e-5, elementwise_affine=True))
+        # )
+        # self.model_output_layer = torch.nn.Sequential(
+        #     torch.nn.Linear(self.embedding_size, self.hidden_size),
+        #     torch.nn.ELU(),
+        #     torch.nn.LayerNorm(self.hidden_size, eps=1e-5, elementwise_affine=True),
+        #     torch.nn.Dropout(self.dropout_rate)
+        # )
+        self.gru_layer = torch.nn.GRU(self.embedding_size, self.hidden_size, batch_first=True, dropout=self.dropout_rate)
+
         self.output_layer = torch.nn.Sequential(
-            torch.nn.Linear(self.input_dim*self.hidden_size, self.num_labels),
-            torch.nn.Softmax(dim=1)
+            torch.nn.Linear(self.hidden_size, self.hidden_size * 2),
+            torch.nn.Tanh(),
+            torch.nn.Linear(self.hidden_size * 2, self.hidden_size),
+            torch.nn.Tanh(),
+            torch.nn.Linear(self.hidden_size, self.num_labels)
         )
 
     def configure_optimizers(self):
-        optim = AdamW(self.parameters(), lr=self.learning_rate, weight_decay=0.1)
+        optim = torch.optim.AdamW(self.parameters(), lr=self.learning_rate, weight_decay=0.1)
+        # optim = torch.optim.RMSprop(self.parameters(), lr=self.learning_rate, weight_decay=0.1)
 
         scheduler = ExponentialLR(optim, gamma=self.gamma)
         lr_scheduler = {'scheduler': scheduler, 'name': 'Exponential', 'monitor': 'loss', 'interval': 'step', 'frequency': 1}
@@ -95,14 +111,20 @@ class EmotionClassifier(LightningModule):
         model_checkpoint = ModelCheckpoint(dirpath=f"./model/model_ckp/", filename='{epoch:02d}_{loss:.2f}', verbose=True, save_last=True, monitor='val_loss', mode='min')
         early_stopping = EarlyStopping(monitor="val_loss", mode="min", patience=self.patience)
         lr_monitor = LearningRateMonitor(logging_interval="step")
-        return [model_checkpoint, early_stopping, lr_monitor]
+        input_monitor = InputMonitor()
+        return [model_checkpoint, early_stopping, lr_monitor, input_monitor]
 
     def forward(self, x):
+        # x = self.embedding_layer(x)
+        # x = self.transformerEncoder(x)
+        # x = self.model_output_layer(x)
+        # output = self.output_layer(x)
+        # return torch.sum(output, 1)
         x = self.embedding_layer(x)
-        x = self.transformerEncoder(x)
-        x = self.model_output_layer(x)
-        output = self.output_layer(x.view(self.batch_size, self.input_dim*self.hidden_size))
-        return output
+        h_0 = torch.zeros(1, self.batch_size, self.hidden_size)
+        x, h = self.gru_layer(x, h_0)
+        output = self.output_layer(x)
+        return F.softmax(torch.sum(output, 1), 1)
 
     def loss(self, output, labels):
         return torch.nn.CrossEntropyLoss(ignore_index=self.pad_token_id)(output, labels)
@@ -136,8 +158,8 @@ class EmotionClassifier(LightningModule):
         loss = self.loss(y_pred, y)
         accuracy = self.accuracy(y_pred, y)
 
-        self.log('loss', loss)
-        self.log('acc', accuracy, prog_bar=True)
+        self.log('loss', loss, on_step=True)
+        self.log('acc', accuracy, prog_bar=True, on_step=True)
         return {'loss': loss, 'acc': accuracy}
 
     def validation_step(self, batch, batch_idx):
