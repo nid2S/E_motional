@@ -1,6 +1,7 @@
 from sklearn.model_selection import train_test_split
-from konlpy.tag import Hannanum
+from konlpy.tag import Okt
 import pandas as pd
+import zipfile
 import re
 
 def change_dataset():
@@ -32,31 +33,35 @@ def make_vocab():
     print("making vocab started")
     CUTTING_RATE = 0.7
 
-    tokenizer = Hannanum()
-    vocab = dict()
+    tokenizer = Okt()
+    token_dict = dict()
 
     train = pd.read_csv("./data/train.txt", sep="\t", index_col=0, encoding="utf-8")
     val = pd.read_csv("./data/val.txt", sep="\t", index_col=0, encoding="utf-8")
     test = pd.read_csv("./data/test.txt", sep="\t", index_col=0, encoding="utf-8")
     data = pd.concat([train, val, test], axis=0)
 
+    with zipfile.ZipFile("data/vocab_data/kowiki.txt.zip") as z:
+        with z.open('kowiki.txt') as f:
+            wiki_data = [line.decode('utf-8').strip() for line in f]
+    data = data.append(pd.DataFrame(wiki_data, columns=["data"]))
+
     for text in data["data"].values:
-        text = re.sub(r"\W", r" ", text).strip()
-        tokens = [token for (token, tag) in tokenizer.pos(text) if ('N' in tag) or ('P' in tag) or ('F' in tag)]
-        for token in tokens:
+        text = re.sub(r"[^가-힣ㄱ-ㅎa-zA-z0-9.,?! ]", "", text).strip()
+        for token in tokenizer.morphs(text, norm=True, stem=True):
             try:
-                vocab[token] += 1
+                token_dict[token] += 1
             except KeyError:
-                vocab[token] = 1
+                token_dict[token] = 1
     print("tokenizing ended")
 
-    vocab = pd.DataFrame.from_dict({'token': vocab.keys(), 'count': vocab.values()})
+    vocab = pd.DataFrame.from_dict({'token': token_dict.keys(), 'count': token_dict.values()})
     vocab.sort_values(["count"], inplace=True, ignore_index=True)
     vocab = vocab.iloc[:int(len(vocab)*CUTTING_RATE)]
     print("sort and cutting ended")
 
     vocab = vocab.drop(["count"], axis=1)
     vocab["index"] = range(2, len(vocab)+2)
-    vocab = pd.concat([pd.DataFrame([["<oov>", 0], ["<pad>", 1]], columns=["token", "index"]), vocab], ignore_index=True)
+    vocab = pd.concat([pd.DataFrame([["<pad>", 0], ["<oov>", 1]], columns=["token", "index"]), vocab], ignore_index=True)
     vocab.to_csv("./data/vocab.txt", sep="\t", encoding='utf-8')
     print("making vocab finished")
