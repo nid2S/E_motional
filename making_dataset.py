@@ -1,8 +1,15 @@
 from sklearn.model_selection import train_test_split
 from konlpy.tag import Okt
 import pandas as pd
+import logging
 import zipfile
 import re
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+handler = logging.StreamHandler()
+handler.setFormatter(logging.Formatter(fmt=None, style='$'))
+logger.addHandler(handler)
 
 def change_dataset():
     train = pd.read_csv("./data/train.txt", sep="\t", encoding="utf-8").drop(["Unnamed: 0"], axis=1)
@@ -30,7 +37,7 @@ def make_testset():
     test.to_csv("./data/test.txt", sep="\t", encoding="utf-8")
 
 def make_vocab():
-    print("making vocab started")
+    logger.info("making vocab started")
     CUTTING_RATE = 0.7
 
     tokenizer = Okt()
@@ -45,23 +52,27 @@ def make_vocab():
         with z.open('kowiki.txt') as f:
             wiki_data = [line.decode('utf-8').strip() for line in f]
     data = data.append(pd.DataFrame(wiki_data, columns=["data"]))
+    data_num = len(data)
+    logger.info('making raw dataset ended | data_num: '+str(data_num))
 
-    for text in data["data"].values:
+    for i, text in enumerate(data["data"].values):
         text = re.sub(r"[^가-힣ㄱ-ㅎa-zA-z0-9.,?! ]", "", text).strip()
         for token in tokenizer.morphs(text, norm=True, stem=True):
             try:
                 token_dict[token] += 1
             except KeyError:
                 token_dict[token] = 1
-    print("tokenizing ended")
+        if i % 1000 == 0:
+            logger.info(f"progress : {i}/{data_num} ({i/data_num*100}%)")
+    logger.info("tokenizing ended")
 
     vocab = pd.DataFrame.from_dict({'token': token_dict.keys(), 'count': token_dict.values()})
     vocab.sort_values(["count"], inplace=True, ignore_index=True)
     vocab = vocab.iloc[:int(len(vocab)*CUTTING_RATE)]
-    print("sort and cutting ended")
+    logger.info("sort and cutting ended")
 
     vocab = vocab.drop(["count"], axis=1)
     vocab["index"] = range(2, len(vocab)+2)
     vocab = pd.concat([pd.DataFrame([["<pad>", 0], ["<oov>", 1]], columns=["token", "index"]), vocab], ignore_index=True)
     vocab.to_csv("./data/vocab.txt", sep="\t", encoding='utf-8')
-    print("making vocab finished")
+    logger.info("making vocab finished")
