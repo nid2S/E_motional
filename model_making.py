@@ -134,7 +134,12 @@ class EmotionClassifier(LightningModule):
             x = []
             for sent in data['data'].values:
                 sent = re.sub(r"[^가-힣ㄱ-ㅎa-zA-z0-9.,?! ]", "", sent).strip()
-                temp_x = [self.vocab[token] for token in self.tokenizer.morphs(sent, norm=True, stem=True)]
+                temp_x = []
+                for token in self.tokenizer.morphs(sent, norm=True, stem=True):
+                    if token in self.vocab.keys():
+                        temp_x.append(self.vocab[token])
+                    else:
+                        temp_x.append(self.vocab['oov'])
                 temp_x = temp_x + [self.pad_token_id] * (self.input_dim - len(temp_x))
                 temp_x = temp_x[:self.input_dim]
                 x.append(temp_x)
@@ -179,8 +184,13 @@ class EmotionClassifier(LightningModule):
 
     def tokenize(self, sent: str) -> torch.FloatTensor:
         sent = re.sub(r"[^가-힣ㄱ-ㅎa-zA-z0-9.,?! ]", "", sent).strip()
-        sent = [self.vocab[token] for token in self.tokenizer.morphs(sent, norm=True, stem=True)]
-        sent = sent + [self.pad_token_id] * (self.input_dim - len(sent))
+        temp_x = []
+        for token in self.tokenizer.morphs(sent, norm=True, stem=True):
+            if token in self.vocab.keys():
+                temp_x.append(self.vocab[token])
+            else:
+                temp_x.append(self.vocab['oov'])
+        sent = temp_x + [self.pad_token_id] * (self.input_dim - len(sent))
         sent = sent[:self.input_dim]
         return torch.FloatTensor(sent)
 

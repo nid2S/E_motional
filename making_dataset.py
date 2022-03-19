@@ -67,7 +67,7 @@ def make_vocab():
     logger.info("tokenizing ended")
 
     vocab = pd.DataFrame.from_dict({'token': token_dict.keys(), 'count': token_dict.values()})
-    vocab.sort_values(["count"], inplace=True, ignore_index=True)
+    vocab.sort_values(["count"], inplace=True, ignore_index=True, ascending=False)
     vocab = vocab.iloc[:int(len(vocab)*CUTTING_RATE)]
     logger.info("sort and cutting ended")
 
