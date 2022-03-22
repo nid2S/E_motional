@@ -84,11 +84,7 @@ class EmotionClassifier(LightningModule):
             torch.nn.Embedding(len(self.vocab), self.embedding_size, self.pad_token_id),
             torch.nn.LayerNorm(self.embedding_size, eps=1e-5)
         )
-        self.gru_layer = torch.nn.Sequential(
-            torch.nn.GRU(self.embedding_size, self.hidden_size, batch_first=True, dropout=self.dropout_rate),
-            torch.nn.ReLU(),
-            torch.nn.LayerNorm(self.hidden_size, eps=1e-5)
-        )
+        self.gru_layer = torch.nn.GRU(self.embedding_size, self.hidden_size, batch_first=True, num_layers=2, dropout=self.dropout_rate)
         self.output_layer = torch.nn.Sequential(
             torch.nn.Linear(self.hidden_size, self.hidden_size * 2),
             torch.nn.Tanh(),
@@ -113,7 +109,7 @@ class EmotionClassifier(LightningModule):
 
     def forward(self, x):
         x = self.embedding_layer(x)
-        h_0 = torch.zeros(1, self.batch_size, self.hidden_size)
+        h_0 = torch.zeros(2, self.batch_size, self.hidden_size)
         x, h = self.gru_layer(x, h_0)
         output = self.output_layer(x)
         return F.softmax(torch.sum(output, 1), 1)
@@ -143,7 +139,7 @@ class EmotionClassifier(LightningModule):
                 temp_x = temp_x + [self.pad_token_id] * (self.input_dim - len(temp_x))
                 temp_x = temp_x[:self.input_dim]
                 x.append(temp_x)
-            x = torch.FloatTensor(x)
+            x = torch.LongTensor(x)
             Y = torch.LongTensor(data['label'])
             data_list.append((x, Y))
         self.train_set = TensorDataset(data_list[0][0], data_list[0][1])
