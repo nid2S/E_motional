@@ -24,6 +24,7 @@ parser.add_argument("-lr", type=float, default=0.1, dest="learning_rate", help="
 parser.add_argument("-dr", type=float, default=0.1, dest="dropout_rate", help="dropout rate")
 parser.add_argument("-gamma", type=float, default=0.9, dest="gamma", help="decay rate of learning_rate on each epoch")
 parser.add_argument("--embedding-size", type=int, default=512, dest="embedding_size", help="size of embedding vector")
+parser.add_argument("--rnn-layer", type=int, default=2, dest="rnn_layers", help="rnn layers")
 
 class InputMonitor(pl.Callback):
     def __init__(self):
@@ -64,6 +65,7 @@ class EmotionClassifier(LightningModule):
         self.embedding_size = hparams.embedding_size
         self.hidden_size = hparams.hidden_size
         self.num_layers = hparams.num_layers
+        self.rnn_layers = hparams.rnn_layers
         self.patience = hparams.patience
         self.gamma = hparams.gamma
         self.learning_rate = hparams.learning_rate
@@ -84,7 +86,7 @@ class EmotionClassifier(LightningModule):
             torch.nn.Embedding(len(self.vocab), self.embedding_size, self.pad_token_id),
             torch.nn.LayerNorm(self.embedding_size, eps=1e-5)
         )
-        self.gru_layer = torch.nn.GRU(self.embedding_size, self.hidden_size, batch_first=True, num_layers=2, dropout=self.dropout_rate)
+        self.gru_layer = torch.nn.GRU(self.embedding_size, self.hidden_size, batch_first=True, num_layers=self.rnn_layers, dropout=self.dropout_rate)
         self.output_layer = torch.nn.Sequential(
             torch.nn.Linear(self.hidden_size, self.hidden_size * 2),
             torch.nn.Tanh(),
@@ -109,7 +111,7 @@ class EmotionClassifier(LightningModule):
 
     def forward(self, x):
         x = self.embedding_layer(x)
-        h_0 = torch.zeros(2, self.batch_size, self.hidden_size)
+        h_0 = torch.zeros(self.rnn_layers, self.batch_size, self.hidden_size).to(self.device)
         x, h = self.gru_layer(x, h_0)
         output = self.output_layer(x)
         return F.softmax(torch.sum(output, 1), 1)
@@ -139,8 +141,8 @@ class EmotionClassifier(LightningModule):
                 temp_x = temp_x + [self.pad_token_id] * (self.input_dim - len(temp_x))
                 temp_x = temp_x[:self.input_dim]
                 x.append(temp_x)
-            x = torch.LongTensor(x)
-            Y = torch.LongTensor(data['label'])
+            x = torch.LongTensor(x).to(self.device)
+            Y = torch.LongTensor(data['label']).to(self.device)
             data_list.append((x, Y))
         self.train_set = TensorDataset(data_list[0][0], data_list[0][1])
         self.val_set = TensorDataset(data_list[1][0], data_list[1][1])
@@ -188,7 +190,7 @@ class EmotionClassifier(LightningModule):
                 temp_x.append(self.vocab['oov'])
         sent = temp_x + [self.pad_token_id] * (self.input_dim - len(sent))
         sent = sent[:self.input_dim]
-        return torch.FloatTensor(sent)
+        return torch.FloatTensor(sent).to(self.device)
 
 
 args = parser.parse_args()
