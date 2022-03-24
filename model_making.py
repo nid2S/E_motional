@@ -24,6 +24,7 @@ parser.add_argument("-p", type=int, default=5, dest="patience", help="number of 
 parser.add_argument("-lr", type=float, default=0.1, dest="learning_rate", help="learning rate")
 parser.add_argument("-dr", type=float, default=0.1, dest="dropout_rate", help="dropout rate")
 parser.add_argument("-gamma", type=float, default=0.9, dest="gamma", help="decay rate of learning_rate on each epoch")
+parser.add_argument("-train", type=bool, default=False, dest="is_train", help="is_train")
 parser.add_argument("--embedding-size", type=int, default=512, dest="embedding_size", help="size of embedding vector")
 parser.add_argument("--rnn-layer", type=int, default=2, dest="rnn_layers", help="rnn layers")
 
@@ -60,6 +61,7 @@ class EmotionClassifier(LightningModule):
         self.gamma = hparams.gamma
         self.learning_rate = hparams.learning_rate
         self.dropout_rate = hparams.dropout_rate
+        self.is_train = hparams.is_train
 
         self.num_labels = 7
         # self.input_dim = 125  # train-125, val-107, test-91
@@ -92,6 +94,11 @@ class EmotionClassifier(LightningModule):
         #     torch.nn.Linear(self.hidden_size, self.num_labels)
         # )
 
+        if self.is_train:
+            self.model.training = True
+            for params in self.model.parameters():
+                params.require_grad = True
+
     def configure_optimizers(self):
         optim = torch.optim.AdamW(self.parameters(), lr=self.learning_rate, weight_decay=0.1)
 
@@ -112,8 +119,8 @@ class EmotionClassifier(LightningModule):
         #
         # output = torch.sum(output, 1)
         # output = F.softmax(output, 1)
-        output = self.model(x).logits
-        return output
+        output = self.model(x)
+        return output.logits
 
     def loss(self, output, labels):
         return torch.nn.CrossEntropyLoss(ignore_index=self.pad_token_id)(output, labels)
@@ -163,10 +170,11 @@ class EmotionClassifier(LightningModule):
         # accuracy = self.accuracy(y_pred, y)
 
         input_ids, token_type_ids, attention_mask, labels = batch
-        output = self.model(input_ids=input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask, labels=labels)
+        output = self(input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask, labels=labels)
         loss = output.loss
         accuracy = self.accuracy(output.logits, labels)
 
+        self.log('loss', loss, on_step=True)
         self.log('acc', accuracy, prog_bar=True, on_step=True)
         return {'loss': loss, 'acc': accuracy}
 
@@ -177,7 +185,7 @@ class EmotionClassifier(LightningModule):
         # accuracy = self.accuracy(y_pred, y)
 
         input_ids, token_type_ids, attention_mask, labels = batch
-        output = self.model(input_ids=input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask, labels=labels)
+        output = self(input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask, labels=labels).logits
         loss = output.loss
         accuracy = self.accuracy(output.logits, labels)
 
