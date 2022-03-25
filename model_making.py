@@ -64,40 +64,30 @@ class EmotionClassifier(LightningModule):
         self.is_train = hparams.is_train
 
         self.num_labels = 7
-        # self.input_dim = 125  # train-125, val-107, test-91
-        self.input_dim = 320  # train-311, val-275, test-209
+        self.input_dim = 125  # train-125, val-107, test-91
 
         self.label_dict = {0: "기쁨", 1: "분노", 2: "슬픔", 3: "불안", 4: "놀람", 5: "혐오", 6: "중립"}
         self.train_set = None  # 78262
         self.val_set = None  # 32020
         self.test_set = None  # 12254
 
-        self.model = MobileBertForSequenceClassification.from_pretrained("google/mobilebert-uncased", num_labels=self.num_labels).to(self.device)
-        self.tokenizer = MobileBertTokenizerFast.from_pretrained("google/mobilebert-uncased")
-        self.vocab_size = self.tokenizer.vocab_size
-        self.pad_token_id = self.tokenizer.pad_token_id
-        # self.tokenizer = Okt()
-        # self.vocab = dict((token, index) for token, index in pd.read_csv('./data/vocab.txt', sep="\t", encoding="utf-8", index_col=0).values)
-        # self.pad_token_id = self.vocab['<pad>']
-        #
-        # self.embedding_layer = torch.nn.Sequential(
-        #     torch.nn.Embedding(len(self.vocab), self.embedding_size, self.pad_token_id),
-        #     torch.nn.LayerNorm(self.embedding_size, eps=1e-5)
-        # )
-        # self.gru_layer = torch.nn.GRU(self.embedding_size, self.hidden_size, batch_first=True, num_layers=self.rnn_layers, dropout=self.dropout_rate)
-        # self.output_layer = torch.nn.Sequential(
-        #     torch.nn.Linear(self.hidden_size, self.hidden_size * 2),
-        #     torch.nn.Tanh(),
-        #     torch.nn.Linear(self.hidden_size * 2, self.hidden_size),
-        #     torch.nn.Tanh(),
-        #     torch.nn.LayerNorm(self.hidden_size, eps=1e-5),
-        #     torch.nn.Linear(self.hidden_size, self.num_labels)
-        # )
+        self.tokenizer = Okt()
+        self.vocab = dict((token, index) for token, index in pd.read_csv('./data/vocab.txt', sep="\t", encoding="utf-8", index_col=0).values)
+        self.pad_token_id = self.vocab['<pad>']
 
-        if self.is_train:
-            self.model.training = True
-            for params in self.model.parameters():
-                params.require_grad = True
+        self.embedding_layer = torch.nn.Sequential(
+            torch.nn.Embedding(len(self.vocab), self.embedding_size, self.pad_token_id),
+            torch.nn.LayerNorm(self.embedding_size, eps=1e-5)
+        )
+        self.gru_layer = torch.nn.GRU(self.embedding_size, self.hidden_size, batch_first=True, num_layers=self.rnn_layers, dropout=self.dropout_rate)
+        self.output_layer = torch.nn.Sequential(
+            torch.nn.Linear(self.hidden_size, self.hidden_size * 2),
+            torch.nn.Tanh(),
+            torch.nn.Linear(self.hidden_size * 2, self.hidden_size),
+            torch.nn.Tanh(),
+            torch.nn.LayerNorm(self.hidden_size, eps=1e-5),
+            torch.nn.Linear(self.hidden_size, self.num_labels)
+        )
 
     def configure_optimizers(self):
         optim = torch.optim.AdamW(self.parameters(), lr=self.learning_rate, weight_decay=0.1)
@@ -112,15 +102,14 @@ class EmotionClassifier(LightningModule):
         return [model_checkpoint, early_stopping, lr_monitor]
 
     def forward(self, x):
-        # x = self.embedding_layer(x)
-        # h_0 = torch.zeros(self.rnn_layers, self.batch_size, self.hidden_size).to(self.device)
-        # x, h = self.gru_layer(x, h_0)
-        # output = self.output_layer(x)
-        #
-        # output = torch.sum(output, 1)
-        # output = F.softmax(output, 1)
-        output = self.model(x)
-        return output.logits
+        x = self.embedding_layer(x)
+        h_0 = torch.zeros(self.rnn_layers, self.batch_size, self.hidden_size).to(self.device)
+        x, h = self.gru_layer(x, h_0)
+        output = self.output_layer(x)
+
+        output = torch.sum(output, 1)
+        output = F.softmax(output, 1)
+        return output
 
     def loss(self, output, labels):
         return torch.nn.CrossEntropyLoss(ignore_index=self.pad_token_id)(output, labels)
@@ -135,24 +124,21 @@ class EmotionClassifier(LightningModule):
         test = pd.read_csv("./data/test.txt", sep="\t", encoding="utf-8", index_col=0)
         data_list = []
         for data in [train, val, test]:
-            # x = []
-            # for sent in data['data'].values:
-            #     sent = re.sub(r"[^가-힣ㄱ-ㅎa-zA-z0-9.,?! ]", "", sent).strip()
-            #     temp_x = []
-            #     for token in self.tokenizer.morphs(sent, norm=True, stem=True):
-            #         if token in self.vocab.keys():
-            #             temp_x.append(self.vocab[token])
-            #         else:
-            #             temp_x.append(self.vocab['oov'])
-            #     temp_x = temp_x + [self.pad_token_id] * (self.input_dim - len(temp_x))
-            #     temp_x = temp_x[:self.input_dim]
-            #     x.append(temp_x)
-            # x = torch.LongTensor(x).to(self.device)
-            # Y = torch.LongTensor(data['label']).to(self.device)
-            # data_list.append((x, Y))
-            x = self.tokenizer.batch_encode_plus(data['data'].to_list(), max_length=self.input_dim, padding="max_length", return_tensors="pt").to(self.device)
+            x = []
+            for sent in data['data'].values:
+                sent = re.sub(r"[^가-힣ㄱ-ㅎa-zA-z0-9.,?! ]", "", sent).strip()
+                temp_x = []
+                for token in self.tokenizer.morphs(sent, norm=True, stem=True):
+                    if token in self.vocab.keys():
+                        temp_x.append(self.vocab[token])
+                    else:
+                        temp_x.append(self.vocab['oov'])
+                temp_x = temp_x + [self.pad_token_id] * (self.input_dim - len(temp_x))
+                temp_x = temp_x[:self.input_dim]
+                x.append(temp_x)
+            x = torch.LongTensor(x).to(self.device)
             Y = torch.LongTensor(data['label']).to(self.device)
-            data_list.append((x["input_ids"], x["token_type_ids"], x["attention_mask"], Y))
+            data_list.append((x, Y))
         self.train_set = TensorDataset(*data_list[0])
         self.val_set = TensorDataset(*data_list[1])
         self.test_set = TensorDataset(*data_list[2])
@@ -164,30 +150,20 @@ class EmotionClassifier(LightningModule):
         return DataLoader(self.val_set, batch_size=self.batch_size, shuffle=False, drop_last=True)
 
     def training_step(self, batch, batch_idx):
-        # x, y = batch
-        # y_pred = self(x)
-        # loss = self.loss(y_pred, y)
-        # accuracy = self.accuracy(y_pred, y)
-
-        input_ids, token_type_ids, attention_mask, labels = batch
-        output = self(input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask, labels=labels)
-        loss = output.loss
-        accuracy = self.accuracy(output.logits, labels)
+        x, y = batch
+        y_pred = self(x)
+        loss = self.loss(y_pred, y)
+        accuracy = self.accuracy(y_pred, y)
 
         self.log('loss', loss, on_step=True)
         self.log('acc', accuracy, prog_bar=True, on_step=True)
         return {'loss': loss, 'acc': accuracy}
 
     def validation_step(self, batch, batch_idx):
-        # x, y = batch
-        # y_pred = self(x)
-        # loss = self.loss(y_pred, y)
-        # accuracy = self.accuracy(y_pred, y)
-
-        input_ids, token_type_ids, attention_mask, labels = batch
-        output = self(input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask, labels=labels).logits
-        loss = output.loss
-        accuracy = self.accuracy(output.logits, labels)
+        x, y = batch
+        y_pred = self(x)
+        loss = self.loss(y_pred, y)
+        accuracy = self.accuracy(y_pred, y)
 
         self.log_dict({'val_loss': loss, 'val_acc': accuracy}, prog_bar=True)
         return {'val_loss': loss, 'val_acc': accuracy}
@@ -200,17 +176,16 @@ class EmotionClassifier(LightningModule):
         return {'avg_val_loss': mean_loss, 'avg_val_acc': mean_acc}
 
     def tokenize(self, sent: str) -> torch.FloatTensor:
-        # sent = re.sub(r"[^가-힣ㄱ-ㅎa-zA-z0-9.,?! ]", "", sent).strip()
-        # temp_x = []
-        # for token in self.tokenizer.morphs(sent, norm=True, stem=True):
-        #     if token in self.vocab.keys():
-        #         temp_x.append(self.vocab[token])
-        #     else:
-        #         temp_x.append(self.vocab['oov'])
-        # sent = temp_x + [self.pad_token_id] * (self.input_dim - len(sent))
-        # sent = sent[:self.input_dim]
-        # return torch.FloatTensor(sent).to(self.device)
-        return self.tokenizer.encode(sent, max_length=self.input_dim, padding="max_length", return_tensors="pt")
+        sent = re.sub(r"[^가-힣ㄱ-ㅎa-zA-z0-9.,?! ]", "", sent).strip()
+        temp_x = []
+        for token in self.tokenizer.morphs(sent, norm=True, stem=True):
+            if token in self.vocab.keys():
+                temp_x.append(self.vocab[token])
+            else:
+                temp_x.append(self.vocab['oov'])
+        sent = temp_x + [self.pad_token_id] * (self.input_dim - len(sent))
+        sent = sent[:self.input_dim]
+        return torch.FloatTensor(sent).to(self.device)
 
 
 args = parser.parse_args()
@@ -223,4 +198,4 @@ example_input = model.tokenize("이건 트레이싱을 위한 예시 입력입�
 model = torch.quantization.convert(model)
 model = torch.jit.trace(model, example_input)
 opt_model = mobile_optimizer.optimize_for_mobile(model)
-opt_model.save_for_lite_interpreter("./model/label_classifier.ptl")
+opt_model.save_for_lite_interpreter("./model/emotion_classifier.ptl")
