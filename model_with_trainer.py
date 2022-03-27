@@ -1,4 +1,4 @@
-from torch.utils import mobile_optimizer
+from torch.utils.mobile_optimizer import optimize_for_mobile
 from transformers import MobileBertForSequenceClassification, MobileBertTokenizerFast
 from transformers import Trainer, TrainingArguments, DataCollatorWithPadding
 from transformers.integrations import TensorBoardCallback
@@ -11,7 +11,6 @@ import os
 MAX_LEN = 320  # train-311, val-275, test-209
 PREMODEL_NAME = "google/mobilebert-uncased"
 RANDOM_SEED = 7777
-label_dict = {'[HAPPY]': 0, '[PANIC]': 1, '[ANGRY]': 2, '[UNSTABLE]': 3, '[HURT]': 4, '[SAD]': 5, '[NEUTRAL]': 6}
 
 def accuracy(pred):
     labels = torch.from_numpy(pred.label_ids)
@@ -19,7 +18,7 @@ def accuracy(pred):
 
     output = torch.argmax(output, dim=1)
     output = torch.sum(output == labels) / output.__len__() * 100  # %(Precentage)
-    return {'accuracy': output}
+    return {'accuracy': output.item()}
 
 def getDataset(isTrain: bool, using_device: str):
     # [{key: value}]
@@ -73,9 +72,11 @@ trainer = Trainer(model=model, args=train_args, data_collator=data_collator, com
 trainer.train()
 torch.save(model, "./model/trainer/pytorch_model.bin")
 
-example_input = model.tokenize("이건 트레이싱을 위한 예시 입력입니다.")
-model = torch.quantization.convert(model)
-model = torch.jit.trace(model, example_input)
-opt_model = mobile_optimizer.optimize_for_mobile(model)
-opt_model.save_for_lite_interpreter("./model/emotion_classifier.ptl")
+# model = MobileBertForSequenceClassification.from_pretrained("./model/trainer")
+# tokenizer = MobileBertTokenizerFast.from_pretrained(PREMODEL_NAME)
 
+example_input = tokenizer.encode("이건 트레이싱을 위한 예시 입력입니다.", return_tensors="pt", max_length=MAX_LEN, padding="max_length", truncation=True)
+model = torch.quantization.convert(model)
+model = torch.jit.trace(model, example_input, strict=False)
+opt_model = optimize_for_mobile(model)
+opt_model._save_for_lite_interpreter("./model/emotion_classifier.ptl")
