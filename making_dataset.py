@@ -1,4 +1,6 @@
 from sklearn.model_selection import train_test_split
+from transformers import MobileBertTokenizerFast
+from hgtk.text import compose
 from konlpy.tag import Okt
 import pandas as pd
 import logging
@@ -76,3 +78,34 @@ def make_vocab():
     vocab = pd.concat([pd.DataFrame([["<pad>", 0], ["<oov>", 1]], columns=["token", "index"]), vocab], ignore_index=True)
     vocab.to_csv("./data/vocab.txt", sep="\t", encoding='utf-8')
     logger.info("making vocab finished")
+
+def make_char_vocab():
+    initial_consonants = ["ㄱ", "ㄴ", "ㄷ", "ㄹ", "ㅁ", "ㅂ", "ㅅ", "ㅇ", "ㅈ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ", "ㄲ", "ㄸ", "ㅃ", "ㅆ", "ㅉ"]
+    middle_consonants = ["ㅏ", "ㅑ", "ㅓ", "ㅕ", "ㅗ", "ㅛ", "ㅜ", "ㅛ", "ㅡ", "ㅣ", "ㅐ", "ㅒ", "ㅔ", "ㅖ", "ㅘ", "ㅙ", "ㅝ", "ㅞ", "ㅚ", "ㅟ", "ㅢ"]
+    last_consonants = ["", "ㄱ", "ㄴ", "ㄷ", "ㄹ", "ㅁ", "ㅂ", "ㅅ", "ㅇ", "ㅈ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ", "ㄲ", "ㅆ", "ㄵ", "ㄶ", "ㄼ", "ㄽ", "ㄿ", "ㅀ", "ㅄ", "ㄿ"]
+    other_chars = [".", ",", "?", "!", '"', "'", "^", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
+    keys = initial_consonants + list(map(lambda x: "_"+x, middle_consonants)) + list(map(lambda x: "__"+x, last_consonants)) + other_chars
+    keys.remove("__")
+
+    tokenizer = MobileBertTokenizerFast.from_pretrained("google/mobilebert-uncased")
+    char_vocab = dict((k, "") for k in keys)
+    logger.info(f"char_num : {len(char_vocab)}")
+
+    for init in initial_consonants:
+        for mid in middle_consonants:
+            for last in last_consonants:
+                turn_char = compose(init+mid+last+"_", compose_code="_")
+                encoded_char = tokenizer.encode(turn_char, add_special_tokens=False)
+                if encoded_char[0] != tokenizer.unk_token_id:
+                    logger.info(f"{turn_char} -> {tokenizer.convert_ids_to_tokens(encoded_char)}")
+                    char_vocab[init] = encoded_char[0]
+                    char_vocab["_" + mid] = encoded_char[1]
+                    if last != "":
+                        char_vocab["__"+last] = encoded_char[2]
+    for c in other_chars:
+        encoded_char = tokenizer.encode(c, add_special_tokens=False)
+        if encoded_char[0] != tokenizer.unk_token_id:
+            char_vocab[c] = encoded_char[0]
+
+    logger.info(f'non_encoded_char = {[k for k, v in char_vocab.items() if v == ""]}')
+    pd.DataFrame(char_vocab.items(), columns=["char", "id"]).to_csv("./data/char_vocab.txt", sep="\t", encoding="utf-8")
