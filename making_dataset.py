@@ -80,32 +80,33 @@ def make_vocab():
     logger.info("making vocab finished")
 
 def make_char_vocab():
-    initial_consonants = ["ㄱ", "ㄴ", "ㄷ", "ㄹ", "ㅁ", "ㅂ", "ㅅ", "ㅇ", "ㅈ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ", "ㄲ", "ㄸ", "ㅃ", "ㅆ", "ㅉ"]
-    middle_consonants = ["ㅏ", "ㅑ", "ㅓ", "ㅕ", "ㅗ", "ㅛ", "ㅜ", "ㅛ", "ㅡ", "ㅣ", "ㅐ", "ㅒ", "ㅔ", "ㅖ", "ㅘ", "ㅙ", "ㅝ", "ㅞ", "ㅚ", "ㅟ", "ㅢ"]
-    last_consonants = ["", "ㄱ", "ㄴ", "ㄷ", "ㄹ", "ㅁ", "ㅂ", "ㅅ", "ㅇ", "ㅈ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ", "ㄲ", "ㅆ", "ㄵ", "ㄶ", "ㄼ", "ㄽ", "ㄿ", "ㅀ", "ㅄ", "ㄿ"]
-    other_chars = [".", ",", "?", "!", '"', "'", "^", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
-    keys = initial_consonants + list(map(lambda x: "_"+x, middle_consonants)) + list(map(lambda x: "__"+x, last_consonants)) + other_chars
-    keys.remove("__")
+    initial_consonants = [
+        'ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', u'ㅃ', u'ㅅ',
+        'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'
+    ]
+    middle_consonants = [
+        'ㅏ', 'ㅐ', 'ㅑ', 'ㅒ', 'ㅓ', 'ㅔ', 'ㅕ', 'ㅖ', 'ㅗ', 'ㅘ',
+        'ㅙ', 'ㅚ', 'ㅛ', 'ㅜ', 'ㅝ', 'ㅞ', 'ㅟ', 'ㅠ', 'ㅡ', 'ㅢ', 'ㅣ'
+    ]
+    last_consonants = [
+        'ㄱ', 'ㄲ', 'ㄳ', 'ㄴ', 'ㄵ', 'ㄶ', 'ㄷ', 'ㄹ', 'ㄺ',
+        'ㄻ', 'ㄼ', 'ㄽ', 'ㄾ', 'ㄿ', 'ㅀ', 'ㅁ', 'ㅂ', 'ㅄ', 'ㅅ',
+        'ㅆ', 'ㅇ', 'ㅈ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'
+    ]
+    other_list = [
+        "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "n",
+        "m", "o", "p", "q", "r", "s" "t", "u", "v", "w", "x", "y", "z",
+        "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+    ]
+    punctuation_list = [".", ",", "?", "!"]
 
-    tokenizer = MobileBertTokenizerFast.from_pretrained("google/mobilebert-uncased")
-    char_vocab = dict((k, "") for k in keys)
-    logger.info(f"char_num : {len(char_vocab)}")
-
-    for init in initial_consonants:
-        for mid in middle_consonants:
-            for last in last_consonants:
-                turn_char = compose(init+mid+last+"_", compose_code="_")
-                encoded_char = tokenizer.encode(turn_char, add_special_tokens=False)
-                if encoded_char[0] != tokenizer.unk_token_id:
-                    logger.info(f"{turn_char} -> {tokenizer.convert_ids_to_tokens(encoded_char)}")
-                    char_vocab[init] = encoded_char[0]
-                    char_vocab["_" + mid] = encoded_char[1]
-                    if last != "":
-                        char_vocab["__"+last] = encoded_char[2]
-    for c in other_chars:
-        encoded_char = tokenizer.encode(c, add_special_tokens=False)
-        if encoded_char[0] != tokenizer.unk_token_id:
-            char_vocab[c] = encoded_char[0]
-
-    logger.info(f'non_encoded_char = {[k for k, v in char_vocab.items() if v == ""]}')
-    pd.DataFrame(char_vocab.items(), columns=["char", "id"]).to_csv("./data/char_vocab.txt", sep="\t", encoding="utf-8")
+    vocab = dict({"[PAD]": 0, "[OOV]": 1})
+    for i, token_list in enumerate([initial_consonants, other_list]):
+        for token in token_list:
+            vocab[token] = len(vocab)
+    for i, token_list in enumerate([initial_consonants, middle_consonants, last_consonants, other_list, punctuation_list]):
+        for token in token_list:
+            if "##"+token not in vocab.keys():
+                vocab["##"+token] = len(vocab)
+    vocab["[SPACE]"] = 150
+    pd.DataFrame(vocab.items(), columns=["char", "id"]).to_csv("./data/vocab.txt", sep="\t", encoding="utf-8")
