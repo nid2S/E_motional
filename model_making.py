@@ -1,11 +1,11 @@
 import setuptools
 import re
+import os
 import math
 import torch
 import argparse
 import pandas as pd
 import pytorch_lightning as pl
-from pytorch_lightning.utilities.types import EVAL_DATALOADERS
 from torch.functional import F
 from hgtk.text import decompose
 from typing import List, Tuple, Optional
@@ -26,7 +26,7 @@ class charDataset(torch.utils.data.Dataset):
         self.vocab = dict((token, id) for _, (token, id) in pd.read_csv("./data/vocab.txt", sep="\t", encoding="utf-8", index_col=0).iterrows())
         self.pad_token_id = 0
         self.oov_token_id = 1
-        self.space_token_id = 150
+        self.space_token_id = 146
 
         self.x = x
         self.Y = Y
@@ -70,7 +70,10 @@ class PositionalEncoding(torch.nn.Module):
         # PE(pos, 2i + 1) = cos(pos/1000^(2i/dim_model))
         pos_encoding[:, 1::2] = torch.cos(position_list * division_term)
         self.pos_encoding = pos_encoding.unsqueeze(0).transpose(0, 1).to(DEVICE)
-        self.register_buffer("pos_encoding", pos_encoding)
+        try:
+            self.register_buffer("pos_encoding", pos_encoding)
+        except KeyError:
+            pass
 
     def forward(self, x: torch.tensor) -> torch.tensor:
         return self.dropout(x + self.pos_encoding[:x.size(0)])
@@ -94,7 +97,7 @@ class EmotionClassifier(LightningModule):
             self.num_layers = 6
             self.dropput_rate = 0.1
             self.gamma = 0.9
-            self.patience = 10
+            self.patience = 5
             self.lr = 0.001
         else:
             self.batch_size = hparams.batch_size
@@ -107,13 +110,21 @@ class EmotionClassifier(LightningModule):
             self.patience = hparams.patience
             self.lr = hparams.lr
         self.num_labels = 7
+        self.input_dim = MAX_LEN
+        self.vocab_size = VOCAB_SIZE
+        self.num_worker = os.cpu_count() if DEVICE == "cpu" else torch.cuda.device_count()
 
-        self.embedding_layer = torch.nn.Embedding(VOCAB_SIZE, self.embedding_size, padding_idx=self.pad_token_id)
-        self.positional_encoding_layer = PositionalEncoding(self.embedding_size, self.hidden_size, self.dropput_rate)
-        encoder_layer = torch.nn.TransformerEncoderLayer(self.hidden_size, self.num_heads, dropout=self.dropput_rate, device=DEVICE,
+        self.embedding_layer = torch.nn.Embedding(self.vocab_size, self.embedding_size, padding_idx=self.pad_token_id)
+        encoder_layer = torch.nn.TransformerEncoderLayer(self.embedding_size, self.num_heads, dropout=self.dropput_rate, device=DEVICE,
                                                          dim_feedforward=2048, activation=F.elu, batch_first=True)
-        self.transformer_encoder_layer = torch.nn.TransformerEncoder(encoder_layer, self.num_layers, norm=torch.nn.LayerNorm(self.hidden_size))
+        self.transformer_encoder = torch.nn.Sequential(
+            PositionalEncoding(self.input_dim, self.embedding_size, self.dropput_rate),
+            torch.nn.TransformerEncoder(encoder_layer, self.num_layers, norm=torch.nn.LayerNorm(self.embedding_size))
+        )
         self.output_layer = torch.nn.Sequential(
+            torch.nn.Linear(self.embedding_size, self.hidden_size, device=DEVICE),
+            torch.nn.ELU(),
+            torch.nn.LayerNorm(self.hidden_size),
             torch.nn.Linear(self.hidden_size, self.hidden_size//2, device=DEVICE),
             torch.nn.ELU(),
             torch.nn.Linear(self.hidden_size//2, self.hidden_size, device=DEVICE),
@@ -140,8 +151,7 @@ class EmotionClassifier(LightningModule):
 
     def forward(self, x):
         x = self.embedding_layer(x)
-        x = self.positional_encoding_layer(x)
-        x = self.transformer_encoder_layer(x)
+        x = self.transformer_encoder(x)
         output = self.output_layer(x)
         return torch.mean(output, dim=1)
 
@@ -173,15 +183,15 @@ class EmotionClassifier(LightningModule):
         self.test_set = charDataset(test["data"].to_list(), test["label"].to_list())
 
     def train_dataloader(self):
-        return DataLoader(self.train_set, batch_size=self.batch_size, shuffle=True, drop_last=True)
+        return DataLoader(self.train_set, batch_size=self.batch_size, shuffle=True, drop_last=True, num_workers=8)
 
     def val_dataloader(self):
-        return DataLoader(self.val_set, batch_size=self.batch_size, shuffle=False, drop_last=True)
+        return DataLoader(self.val_set, batch_size=self.batch_size, shuffle=False, drop_last=True, num_workers=8)
 
     def test_dataloader(self):
-        return DataLoader(self.test_set, batch_size=self.batch_size, shuffle=False, drop_last=True)
+        return DataLoader(self.test_set, batch_size=self.batch_size, shuffle=False, drop_last=True, num_workers=8)
 
-    def training_step(self, batch, batch_idx):
+    def training_step(self, batch, batch_idx, optimizer_idx):
         x, y = batch
         y_pred = self(x)
         loss = self.loss(y_pred, y)
@@ -215,9 +225,9 @@ class EmotionClassifier(LightningModule):
         return torch.argmax(pred, dim=1)
 
     def tokenize(self, sent: str) -> torch.Tensor:
-        vocab = dict((token, id) for _, (token, id) in pd.read_csv("./data/vocab.txt", sep="\t", encodings="utf-8", index_col=0).iterrows())
+        vocab = dict((token, id) for _, (token, id) in pd.read_csv("./data/vocab.txt", sep="\t", encoding="utf-8", index_col=0).iterrows())
         oov_token_id = 1
-        space_token_id = 150
+        space_token_id = 146
 
         encoded_sent = []
         for word in decompose(sent, "_").split():
@@ -233,27 +243,27 @@ class EmotionClassifier(LightningModule):
             encoded_sent.append(space_token_id)
         return torch.LongTensor(encoded_sent)
 
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-epochs", type=int, default=50, dest="epochs", help="epochs")
+    parser.add_argument("-batch_size", type=int, default=32, dest="batch_size", help="batch_size")
+    parser.add_argument("-lr", type=int, default=0.001, dest="lr", help="learning rate")
+    parser.add_argument("-embedding-size", type=int, default=512, dest="embedding_size", help="size of embedding layer")
+    parser.add_argument("-hidden_size", type=int, default=256, dest="hidden_size", help="size of hidden layer")
+    parser.add_argument("-num-heads", type=int, default=8, dest="num_heads", help="num of attention heads")
+    parser.add_argument("-num-layers", type=int, default=6, dest="num_layers", help="num of attention layers")
+    parser.add_argument("-dropout-rate", type=int, default=0.1, dest="dropout_rate", help="rate of dropout")
+    parser.add_argument("-gamma", type=int, default=0.9, dest="gamma", help="rate of multiplied with lr for each epoch")
+    parser.add_argument("-patience", type=int, default=5, dest="patience", help="num of times monitoring metric can be reduced")
 
-parser = argparse.ArgumentParser()
-parser.add_argument("-epochs", type=int, default=50, dest="epochs", help="epochs")
-parser.add_argument("-batch_size", type=int, default=32, dest="batch_size", help="batch_size")
-parser.add_argument("-lr", type=int, default=0.001, dest="lr", help="learning rate")
-parser.add_argument("-embedding-size", type=int, default=512, dest="embedding_size", help="size of embedding layer")
-parser.add_argument("-hidden_size", type=int, default=256, dest="hidden_size", help="size of hidden layer")
-parser.add_argument("-num-heads", type=int, default=8, dest="num_heads", help="num of attention heads")
-parser.add_argument("-num-layers", type=int, default=6, dest="num_layers", help="num of attention layers")
-parser.add_argument("-dropout-rate", type=int, default=0.1, dest="dropout_rate", help="rate of dropout")
-parser.add_argument("-gamma", type=int, default=0.9, dest="gamma", help="rate of multiplied with lr for each epoch")
-parser.add_argument("-patience", type=int, default=10, dest="patience", help="num of times monitoring metric can be reduced")
+    args = parser.parse_args()
+    model = EmotionClassifier(args)
+    trainer = Trainer(max_epochs=args.epochs, gpus=torch.cuda.device_count(), logger=TensorBoardLogger("./model/tensorboardLog/"))
+    trainer.fit(model)
+    torch.save(model.state_dict(), "./model/emotion_classifier_state.pt")
 
-args = parser.parse_args()
-model = EmotionClassifier(args)
-trainer = Trainer(max_epochs=args.epochs, gpus=torch.cuda.device_count(), logger=TensorBoardLogger("./model/tensorboardLog/"))
-trainer.fit(model)
-torch.save(model.state_dict(), "./model/emotion_classifier_state.pt")
-
-example_input = model.encode("이건 트레이싱을 위한 예시 입력입니다.", max_length=None)
-model = torch.quantization.convert(model)
-model = torch.jit.trace(model, example_input, strict=False)
-opt_model = optimize_for_mobile(model)
-opt_model._save_for_lite_interpreter("./model/emotion_classifier.ptl")
+    example_input = model.tokenize("이건 트레이싱을 위한 예시 입력입니다.")
+    model = torch.quantization.convert(model)
+    model = torch.jit.trace(model, example_input, strict=False)
+    opt_model = optimize_for_mobile(model)
+    opt_model._save_for_lite_interpreter("./model/emotion_classifier.ptl")
