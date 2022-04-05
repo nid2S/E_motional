@@ -12,3 +12,11 @@
 
 # Model
 - 먼저 간단한 RNN기반 모델을 PL로 제작한 뒤, CNN기반, Attention + S2S, Transformer등도 제작해봄. 
+
+# Problem
+- softmax -> mean 방식으로 하자니 input_dim이 너무 길어 각 학습이 잘 적용되지 않을것 같음.
+  -> 편차가 가장 큰(표준편차나 분산이 가장 큰)텐서를 고른다 -> grad_fn으로 추적이 안되서 학습이 안될듯
+  -> input_dim을 줄인다 -> 이건 생각 좀 해봐야 할듯(굳이 이 문제 아니더라도 input dim이 길어서 좋을거 없으니까)
+- 전처리 속도가 꽤 느린편
+  -> 현재 알고리즘은 decompose.split() -> word.split("_") -> vocab[token\] + 마지막에 space_token_id(반복문)
+  -> decompose -> 사이의 공백 space_token으로 교체 -> "_"를 " ##"로 교체?\ -> vocab[token\]?
