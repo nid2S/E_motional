@@ -95,7 +95,7 @@ def make_char_vocab():
     ]
     other_list = [
         "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "n",
-        "m", "o", "p", "q", "r", "s" "t", "u", "v", "w", "x", "y", "z",
+        "m", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z",
         "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
     ]
     punctuation_list = [".", ",", "?", "!"]
@@ -108,5 +108,5 @@ def make_char_vocab():
         for token in token_list:
             if "##"+token not in vocab.keys():
                 vocab["##"+token] = len(vocab)
-    vocab["[SPACE]"] = 150
+    vocab["[SPACE]"] = len(vocab)
     pd.DataFrame(vocab.items(), columns=["char", "id"]).to_csv("./data/vocab.txt", sep="\t", encoding="utf-8")

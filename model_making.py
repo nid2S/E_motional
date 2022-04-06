@@ -39,22 +39,27 @@ class charDataset(torch.utils.data.Dataset):
         return torch.LongTensor(x).to(DEVICE), torch.scalar_tensor(self.Y[index], dtype=torch.long).to(DEVICE)
 
     def encoding_list(self, sent: str) -> List[int]:
-        result_list = []
-        for word in decompose(sent, compose_code="_").split():
-            for char in word.split("_"):
-                for i, c in enumerate(list(char)):
-                    try:
-                        if i == 0:
-                            result_list.append(self.vocab[c])
-                        else:
-                            result_list.append(self.vocab["##" + c])
-                    except KeyError:
-                        result_list.append(self.oov_token_id)
-            result_list.append(self.space_token_id)
+        sent = re.sub(" (\W)", r"\1", decompose(sent, compose_code=" "))
+        is_subword = False
+        encoded_sent = []
 
-        result_list = [0] * (MAX_LEN - len(result_list)) + result_list
-        result_list = result_list[:MAX_LEN]
-        return result_list
+        for char in sent:
+            if char == " ":
+                char = "[SPACE]"
+                is_subword = False
+            elif not is_subword:
+                is_subword = True
+            else:
+                char = "##" + char
+
+            try:
+                encoded_sent.append(self.vocab[char])
+            except KeyError:
+                encoded_sent.append(self.oov_token_id)
+
+        encoded_sent = [0] * (MAX_LEN - len(encoded_sent)) + encoded_sent
+        encoded_sent = encoded_sent[:MAX_LEN]
+        return encoded_sent
 
 class PositionalEncoding(torch.nn.Module):
     def __init__(self, input_dim, model_dim, dropout_rate):
@@ -227,21 +232,25 @@ class EmotionClassifier(LightningModule):
     def tokenize(self, sent: str) -> torch.Tensor:
         vocab = dict((token, id) for _, (token, id) in pd.read_csv("./data/vocab.txt", sep="\t", encoding="utf-8", index_col=0).iterrows())
         oov_token_id = 1
-        space_token_id = 146
+        is_subword = False
 
         encoded_sent = []
-        for word in decompose(sent, "_").split():
-            for char in word.split("_"):
-                for i, c in enumerate(list(char)):
-                    try:
-                        if i == 0:
-                            encoded_sent.append(vocab[c])
-                        else:
-                            encoded_sent.append(vocab["##" + c])
-                    except KeyError:
-                        encoded_sent.append(oov_token_id)
-            encoded_sent.append(space_token_id)
+        sent = re.sub(" (\W)", r"\1", decompose(sent, compose_code=" "))
+        for char in sent:
+            if char == " ":
+                char = "[SPACE]"
+                is_subword = False
+            elif not is_subword:
+                is_subword = True
+            else:
+                char = "##"+char
+
+            try:
+                encoded_sent.append(vocab[char])
+            except KeyError:
+                encoded_sent.append(oov_token_id)
         return torch.LongTensor(encoded_sent)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
