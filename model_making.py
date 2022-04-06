@@ -28,14 +28,14 @@ class charDataset(torch.utils.data.Dataset):
         self.oov_token_id = 1
         self.space_token_id = 146
 
-        self.x = x
+        self.x = [self.encoding_list(sent) for sent in x]
         self.Y = Y
 
     def __len__(self) -> int:
         return len(self.Y)
 
     def __getitem__(self, index) -> Tuple[torch.LongTensor, torch.Tensor]:
-        x = self.encoding_list(self.x[index])
+        x = self.x[index]
         return torch.LongTensor(x).to(DEVICE), torch.scalar_tensor(self.Y[index], dtype=torch.long).to(DEVICE)
 
     def encoding_list(self, sent: str) -> List[int]:
@@ -119,21 +119,23 @@ class EmotionClassifier(LightningModule):
         self.vocab_size = VOCAB_SIZE
         self.num_worker = os.cpu_count() if DEVICE == "cpu" else torch.cuda.device_count()
 
-        self.embedding_layer = torch.nn.Embedding(self.vocab_size, self.embedding_size, padding_idx=self.pad_token_id)
-        encoder_layer = torch.nn.TransformerEncoderLayer(self.embedding_size, self.num_heads, dropout=self.dropput_rate, device=DEVICE,
-                                                         dim_feedforward=2048, activation=F.elu, batch_first=True)
-        self.transformer_encoder = torch.nn.Sequential(
-            PositionalEncoding(self.input_dim, self.embedding_size, self.dropput_rate),
-            torch.nn.TransformerEncoder(encoder_layer, self.num_layers, norm=torch.nn.LayerNorm(self.embedding_size))
+        self.embeddingLayer = torch.nn.Embedding(self.vocab_size, self.embedding_size, padding_idx=self.pad_token_id)
+        self.linearLayer = torch.nn.Sequential(
+            torch.nn.Linear(self.embedding_size, self.hidden_size),
+            torch.nn.ELU(),
+            torch.nn.LayerNorm(self.hidden_size)
         )
-        self.output_layer = torch.nn.Sequential(
-            torch.nn.Linear(self.embedding_size, self.hidden_size, device=DEVICE),
-            torch.nn.ELU(),
-            torch.nn.LayerNorm(self.hidden_size),
+        encoder_layer = torch.nn.TransformerEncoderLayer(self.hidden_size, self.num_heads, dropout=self.dropput_rate, device=DEVICE,
+                                                         dim_feedforward=2048, activation=F.leaky_relu, batch_first=True)
+        self.transformerEncoder = torch.nn.Sequential(
+            PositionalEncoding(self.input_dim, self.hidden_size, self.dropput_rate),
+            torch.nn.TransformerEncoder(encoder_layer, self.num_layers, norm=torch.nn.LayerNorm(self.hidden_size))
+        )
+        self.outputLayer = torch.nn.Sequential(
             torch.nn.Linear(self.hidden_size, self.hidden_size//2, device=DEVICE),
-            torch.nn.ELU(),
+            torch.nn.LeakyReLU(),
             torch.nn.Linear(self.hidden_size//2, self.hidden_size, device=DEVICE),
-            torch.nn.ELU(),
+            torch.nn.ReLU(),
             torch.nn.LayerNorm(self.hidden_size),
             torch.nn.Linear(self.hidden_size, self.num_labels),
             torch.nn.Softmax(dim=-1)
@@ -155,9 +157,10 @@ class EmotionClassifier(LightningModule):
         return [model_checkpoint, early_stopping, lr_monitor]
 
     def forward(self, x):
-        x = self.embedding_layer(x)
-        x = self.transformer_encoder(x)
-        output = self.output_layer(x)
+        x = self.embeddingLayer(x)
+        x = self.linearLayer(x)
+        x = self.transformerEncoder(x)
+        output = self.outputLayer(x)
         return torch.mean(output, dim=1)
 
     def loss(self, output, labels):
