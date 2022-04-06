@@ -118,6 +118,7 @@ class EmotionClassifier(LightningModule):
         self.input_dim = MAX_LEN
         self.vocab_size = VOCAB_SIZE
         self.num_worker = os.cpu_count() if DEVICE == "cpu" else torch.cuda.device_count()
+        self.num_worker = self.num_worker if DEVICE == "cpu" or self.num_worker <= 2 else 2
 
         self.embeddingLayer = torch.nn.Embedding(self.vocab_size, self.embedding_size, padding_idx=self.pad_token_id)
         self.linearLayer = torch.nn.Sequential(
@@ -191,13 +192,13 @@ class EmotionClassifier(LightningModule):
         self.test_set = charDataset(test["data"].to_list(), test["label"].to_list())
 
     def train_dataloader(self):
-        return DataLoader(self.train_set, batch_size=self.batch_size, shuffle=True, drop_last=True, num_workers=8)
+        return DataLoader(self.train_set, batch_size=self.batch_size, shuffle=True, drop_last=True, num_workers=self.num_worker)
 
     def val_dataloader(self):
-        return DataLoader(self.val_set, batch_size=self.batch_size, shuffle=False, drop_last=True, num_workers=8)
+        return DataLoader(self.val_set, batch_size=self.batch_size, shuffle=False, drop_last=True, num_workers=self.num_worker)
 
     def test_dataloader(self):
-        return DataLoader(self.test_set, batch_size=self.batch_size, shuffle=False, drop_last=True, num_workers=8)
+        return DataLoader(self.test_set, batch_size=self.batch_size, shuffle=False, drop_last=True, num_workers=self.num_worker)
 
     def training_step(self, batch, batch_idx, optimizer_idx):
         x, y = batch
@@ -256,6 +257,8 @@ class EmotionClassifier(LightningModule):
 
 
 if __name__ == '__main__':
+    torch.multiprocessing.set_start_method('spawn')  # for using GPU
+
     parser = argparse.ArgumentParser()
     parser.add_argument("-epochs", type=int, default=50, dest="epochs", help="epochs")
     parser.add_argument("-batch_size", type=int, default=32, dest="batch_size", help="batch_size")
