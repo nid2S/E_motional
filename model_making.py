@@ -3,6 +3,7 @@ import re
 import os
 import math
 import torch
+import logging
 import argparse
 import pandas as pd
 import pytorch_lightning as pl
@@ -88,6 +89,9 @@ class EmotionClassifier(LightningModule):
 
         self.RANDOM_SEED = 7777
         pl.seed_everything(self.RANDOM_SEED)
+        self.info_logger = logging.getLogger()
+        self.info_logger.setLevel(logging.INFO)
+        self.info_logger.addHandler(logging.StreamHandler())
         self.train_set = None
         self.val_set = None
         self.test_set = None
@@ -161,7 +165,7 @@ class EmotionClassifier(LightningModule):
 
     def accuracy(self, output, labels):
         output = torch.argmax(output, dim=1)
-        self.logger.info(output)
+        self.info_logger.info(f"\npred : {output}")
         return torch.sum(output == labels) / output.__len__() * 100  # %(Precentage)
 
     def prepare_data(self):
