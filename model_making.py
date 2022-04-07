@@ -35,8 +35,7 @@ class charDataset(torch.utils.data.Dataset):
         return len(self.Y)
 
     def __getitem__(self, index) -> Tuple[torch.LongTensor, torch.Tensor]:
-        x = self.x[index]
-        return torch.LongTensor(x).to(DEVICE), torch.scalar_tensor(self.Y[index], dtype=torch.long).to(DEVICE)
+        return torch.LongTensor(self.x[index]).to(DEVICE), torch.scalar_tensor(self.Y[index], dtype=torch.long).to(DEVICE)
 
     def encoding_list(self, sent: str) -> List[int]:
         sent = re.sub(" (\W)", r"\1", decompose(sent, compose_code=" "))
@@ -127,33 +126,26 @@ class EmotionClassifier(LightningModule):
             torch.nn.LayerNorm(self.hidden_size)
         )
         encoder_layer = torch.nn.TransformerEncoderLayer(self.hidden_size, self.num_heads, dropout=self.dropput_rate, device=DEVICE,
-                                                         dim_feedforward=2048, activation=F.leaky_relu, batch_first=True)
+                                                         dim_feedforward=2048, activation=F.gelu, batch_first=True)
         self.transformerEncoder = torch.nn.Sequential(
             PositionalEncoding(self.input_dim, self.hidden_size, self.dropput_rate),
             torch.nn.TransformerEncoder(encoder_layer, self.num_layers, norm=torch.nn.LayerNorm(self.hidden_size))
         )
         self.outputLayer = torch.nn.Sequential(
-            torch.nn.Linear(self.hidden_size, self.hidden_size//2, device=DEVICE),
-            torch.nn.LeakyReLU(),
-            torch.nn.Linear(self.hidden_size//2, self.hidden_size, device=DEVICE),
-            torch.nn.ReLU(),
-            torch.nn.LayerNorm(self.hidden_size),
             torch.nn.Linear(self.hidden_size, self.num_labels),
             torch.nn.Softmax(dim=-1)
         )
 
     def configure_optimizers(self):
-        optim = torch.optim.AdamW(self.parameters(), self.lr, weight_decay=0.1)
-        optim_N = torch.optim.NAdam(self.parameters(), self.lr, weight_decay=0.1, momentum_decay=0.1)
+        optim = torch.optim.NAdam(self.parameters(), self.lr, weight_decay=0.1)
         lr_scheduler = ExponentialLR(optim, gamma=self.gamma)
-        lr_scheduler_N = ExponentialLR(optim_N, gamma=self.gamma)
 
-        return [optim, optim_N], [lr_scheduler, lr_scheduler_N]
+        return [optim], [lr_scheduler]
 
     def configure_callbacks(self):
         model_checkpoint = ModelCheckpoint("./model/model_ckp/", monitor="val_acc", save_last=True)
         early_stopping = EarlyStopping(monitor="val_acc", patience=self.patience)
-        lr_monitor = LearningRateMonitor(log_momentum=True)
+        lr_monitor = LearningRateMonitor()
 
         return [model_checkpoint, early_stopping, lr_monitor]
 
@@ -169,6 +161,7 @@ class EmotionClassifier(LightningModule):
 
     def accuracy(self, output, labels):
         output = torch.argmax(output, dim=1)
+        self.logger.info(output)
         return torch.sum(output == labels) / output.__len__() * 100  # %(Precentage)
 
     def prepare_data(self):
@@ -200,14 +193,13 @@ class EmotionClassifier(LightningModule):
     def test_dataloader(self):
         return DataLoader(self.test_set, batch_size=self.batch_size, shuffle=False, drop_last=True, num_workers=self.num_worker)
 
-    def training_step(self, batch, batch_idx, optimizer_idx):
+    def training_step(self, batch, batch_idx):
         x, y = batch
         y_pred = self(x)
         loss = self.loss(y_pred, y)
         accuracy = self.accuracy(y_pred, y)
 
-        self.log('loss', loss)
-        self.log('acc', accuracy, prog_bar=True)
+        self.log_dict({'loss': loss, 'acc': accuracy}, prog_bar=True)
         return {'loss': loss, 'acc': accuracy}
 
     def validation_step(self, batch, batch_idx):
@@ -216,14 +208,14 @@ class EmotionClassifier(LightningModule):
         loss = self.loss(y_pred, y)
         accuracy = self.accuracy(y_pred, y)
 
-        self.log_dict({'val_loss': loss, 'val_acc': accuracy}, prog_bar=True)
+        self.log_dict({'val_loss': loss, 'val_acc': accuracy}, on_step=True, on_epoch=False, prog_bar=True)
         return {'val_loss': loss, 'val_acc': accuracy}
 
     def validation_epoch_end(self, outputs):
         mean_loss = torch.stack([output['val_loss'] for output in outputs]).mean()
         mean_acc = torch.stack([output['val_acc'] for output in outputs]).mean()
 
-        self.log_dict({'avg_val_loss': mean_loss, 'avg_val_acc': mean_acc}, on_epoch=True, prog_bar=True)
+        self.log_dict({'avg_val_loss': mean_loss, 'avg_val_acc': mean_acc}, prog_bar=True)
         return {'avg_val_loss': mean_loss, 'avg_val_acc': mean_acc}
 
     def predict(self, x):
@@ -253,7 +245,7 @@ class EmotionClassifier(LightningModule):
                 encoded_sent.append(vocab[char])
             except KeyError:
                 encoded_sent.append(oov_token_id)
-        return torch.LongTensor(encoded_sent)
+        return torch.LongTensor(encoded_sent).to(DEVICE)
 
 
 if __name__ == '__main__':
