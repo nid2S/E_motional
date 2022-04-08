@@ -6,25 +6,26 @@ import torch
 import logging
 import argparse
 import pandas as pd
-import pytorch_lightning as pl
 from torch.functional import F
 from hgtk.text import decompose
-from typing import List, Tuple, Optional
+from typing import List, Tuple
+from torchmetrics import Accuracy
+from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import ExponentialLR
-from torch.utils.data import TensorDataset, DataLoader
-from pytorch_lightning import LightningModule, Trainer
-from pytorch_lightning.loggers import TensorBoardLogger
 from torch.utils.mobile_optimizer import optimize_for_mobile
-from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping, LearningRateMonitor
 
 MAX_LEN = 415  # train - 415, val - 364, test - 289
 VOCAB_SIZE = 150
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+RANDOM_SEED = 7777
+logger = logging.getLogger()
+logger.setLevel(logging.DEBUG)
+logger.addHandler(logging.StreamHandler())
 
 class charDataset(torch.utils.data.Dataset):
     def __init__(self, x: List[str], Y: List[int]):
         super(charDataset, self).__init__()
-        self.vocab = dict((token, id) for _, (token, id) in pd.read_csv("./data/vocab.txt", sep="\t", encoding="utf-8", index_col=0).iterrows())
+        self.vocab = dict((token, idx) for _, (token, idx) in pd.read_csv("./data/vocab.txt", sep="\t", encoding="utf-8", index_col=0).iterrows())
         self.pad_token_id = 0
         self.oov_token_id = 1
         self.space_token_id = 146
@@ -83,75 +84,36 @@ class PositionalEncoding(torch.nn.Module):
     def forward(self, x: torch.tensor) -> torch.tensor:
         return self.dropout(x + self.pos_encoding[:x.size(0)])
 
-class EmotionClassifier(LightningModule):
-    def __init__(self, hparams: Optional[argparse.Namespace]):
+class EmotionClassifier(torch.nn.Module):
+    def __init__(self,
+                 embedding_size: int,
+                 hidden_size: int,
+                 num_heads: int,
+                 num_layers: int,
+                 dropout_rate: float,
+                 **kwargs):
         super(EmotionClassifier, self).__init__()
+        num_labels = 7
+        pad_token_id = 0
+        input_dim = MAX_LEN
+        vocab_size = VOCAB_SIZE
 
-        self.RANDOM_SEED = 7777
-        pl.seed_everything(self.RANDOM_SEED)
-        self.info_logger = logging.getLogger()
-        self.info_logger.setLevel(logging.INFO)
-        self.info_logger.addHandler(logging.StreamHandler())
-        self.train_set = None
-        self.val_set = None
-        self.test_set = None
-
-        self.pad_token_id = 0
-        if hparams is None:
-            self.batch_size = 32
-            self.embedding_size = 512
-            self.hidden_size = 256
-            self.num_heads = 8
-            self.num_layers = 6
-            self.dropput_rate = 0.1
-            self.gamma = 0.9
-            self.patience = 5
-            self.lr = 0.001
-        else:
-            self.batch_size = hparams.batch_size
-            self.embedding_size = hparams.embedding_size
-            self.hidden_size = hparams.hidden_size
-            self.num_heads = hparams.num_heads
-            self.num_layers = hparams.num_layers
-            self.dropput_rate = hparams.dropout_rate
-            self.gamma = hparams.gamma
-            self.patience = hparams.patience
-            self.lr = hparams.lr
-        self.num_labels = 7
-        self.input_dim = MAX_LEN
-        self.vocab_size = VOCAB_SIZE
-        self.num_worker = os.cpu_count() if DEVICE == "cpu" else torch.cuda.device_count()
-        self.num_worker = self.num_worker if DEVICE == "cpu" or self.num_worker <= 2 else 2
-
-        self.embeddingLayer = torch.nn.Embedding(self.vocab_size, self.embedding_size, padding_idx=self.pad_token_id)
+        self.embeddingLayer = torch.nn.Embedding(vocab_size, embedding_size, padding_idx=pad_token_id)
         self.linearLayer = torch.nn.Sequential(
-            torch.nn.Linear(self.embedding_size, self.hidden_size),
+            torch.nn.Linear(embedding_size, hidden_size),
             torch.nn.ELU(),
-            torch.nn.LayerNorm(self.hidden_size)
+            torch.nn.LayerNorm(hidden_size)
         )
-        encoder_layer = torch.nn.TransformerEncoderLayer(self.hidden_size, self.num_heads, dropout=self.dropput_rate, device=DEVICE,
+        encoder_layer = torch.nn.TransformerEncoderLayer(hidden_size, num_heads, dropout=dropout_rate, device=DEVICE,
                                                          dim_feedforward=2048, activation=F.gelu, batch_first=True)
         self.transformerEncoder = torch.nn.Sequential(
-            PositionalEncoding(self.input_dim, self.hidden_size, self.dropput_rate),
-            torch.nn.TransformerEncoder(encoder_layer, self.num_layers, norm=torch.nn.LayerNorm(self.hidden_size))
+            PositionalEncoding(input_dim, hidden_size, dropout_rate),
+            torch.nn.TransformerEncoder(encoder_layer, num_layers, norm=torch.nn.LayerNorm(hidden_size))
         )
         self.outputLayer = torch.nn.Sequential(
-            torch.nn.Linear(self.hidden_size, self.num_labels),
+            torch.nn.Linear(hidden_size, num_labels),
             torch.nn.Softmax(dim=-1)
         )
-
-    def configure_optimizers(self):
-        optim = torch.optim.NAdam(self.parameters(), self.lr, weight_decay=0.1)
-        lr_scheduler = ExponentialLR(optim, gamma=self.gamma)
-
-        return [optim], [lr_scheduler]
-
-    def configure_callbacks(self):
-        model_checkpoint = ModelCheckpoint("./model/model_ckp/", monitor="val_acc", save_last=True)
-        early_stopping = EarlyStopping(monitor="val_acc", patience=self.patience)
-        lr_monitor = LearningRateMonitor()
-
-        return [model_checkpoint, early_stopping, lr_monitor]
 
     def forward(self, x):
         x = self.embeddingLayer(x)
@@ -160,81 +122,13 @@ class EmotionClassifier(LightningModule):
         output = self.outputLayer(x)
         return torch.mean(output, dim=1)
 
-    def loss(self, output, labels):
-        return torch.nn.CrossEntropyLoss(ignore_index=self.pad_token_id)(output, labels)
-
-    def accuracy(self, output, labels):
-        output = torch.argmax(output, dim=1)
-        self.info_logger.info(f"\npred : {output}")
-        return torch.sum(output == labels) / output.__len__() * 100  # %(Precentage)
-
-    def prepare_data(self):
-        train = pd.read_csv("./data/train.txt", sep="\t", encoding="utf-8", index_col=0)
-        train["data"] = train["data"].apply(lambda x: re.sub("[^가-힣0-9a-z.,?!]", "", x.lower()))
-        train["data"] = train["data"].apply(lambda x: x if x != "" else None)
-        train.dropna(inplace=True)
-
-        val = pd.read_csv("./data/val.txt", sep="\t", encoding="utf-8", index_col=0)
-        val["data"] = val["data"].apply(lambda x: re.sub("[^가-힣0-9a-z.,?!]", "", x.lower()))
-        val["data"] = val["data"].apply(lambda x: x if x != "" else None)
-        val.dropna(inplace=True)
-
-        test = pd.read_csv("./data/test.txt", sep="\t", encoding="utf-8", index_col=0)
-        test["data"] = test["data"].apply(lambda x: re.sub("[^가-힣0-9a-z.,?!]", "", x.lower()))
-        test["data"] = test["data"].apply(lambda x: x if x != "" else None)
-        test.dropna(inplace=True)
-
-        self.train_set = charDataset(train["data"].to_list(), train["label"].to_list())
-        self.val_set = charDataset(val["data"].to_list(), val["label"].to_list())
-        self.test_set = charDataset(test["data"].to_list(), test["label"].to_list())
-
-    def train_dataloader(self):
-        return DataLoader(self.train_set, batch_size=self.batch_size, shuffle=True, drop_last=True, num_workers=self.num_worker)
-
-    def val_dataloader(self):
-        return DataLoader(self.val_set, batch_size=self.batch_size, shuffle=False, drop_last=True, num_workers=self.num_worker)
-
-    def test_dataloader(self):
-        return DataLoader(self.test_set, batch_size=self.batch_size, shuffle=False, drop_last=True, num_workers=self.num_worker)
-
-    def training_step(self, batch, batch_idx):
-        x, y = batch
-        y_pred = self(x)
-        loss = self.loss(y_pred, y)
-        accuracy = self.accuracy(y_pred, y)
-
-        self.log_dict({'loss': loss, 'acc': accuracy}, prog_bar=True)
-        return {'loss': loss, 'acc': accuracy}
-
-    def validation_step(self, batch, batch_idx):
-        x, y = batch
-        y_pred = self(x)
-        loss = self.loss(y_pred, y)
-        accuracy = self.accuracy(y_pred, y)
-
-        self.log_dict({'val_loss': loss, 'val_acc': accuracy}, on_step=True, on_epoch=False, prog_bar=True)
-        return {'val_loss': loss, 'val_acc': accuracy}
-
-    def validation_epoch_end(self, outputs):
-        mean_loss = torch.stack([output['val_loss'] for output in outputs]).mean()
-        mean_acc = torch.stack([output['val_acc'] for output in outputs]).mean()
-
-        self.log_dict({'avg_val_loss': mean_loss, 'avg_val_acc': mean_acc}, prog_bar=True)
-        return {'avg_val_loss': mean_loss, 'avg_val_acc': mean_acc}
-
-    def predict(self, x):
-        model.eval()
-        encoded_x = self.tokenize(x).to(DEVICE)
-        with torch.no_grad:
-            pred = self(encoded_x)
-        return torch.argmax(pred, dim=1)
-
     def tokenize(self, sent: str) -> torch.Tensor:
-        vocab = dict((token, id) for _, (token, id) in pd.read_csv("./data/vocab.txt", sep="\t", encoding="utf-8", index_col=0).iterrows())
+        vocab = dict((token, idx) for _, (token, idx) in pd.read_csv("./data/vocab.txt", sep="\t", encoding="utf-8", index_col=0).iterrows())
         oov_token_id = 1
         is_subword = False
 
         encoded_sent = []
+        sent = re.sub("[^가-힣a-z0-9.,?!]", "", sent.lower())
         sent = re.sub(" (\W)", r"\1", decompose(sent, compose_code=" "))
         for char in sent:
             if char == " ":
@@ -254,6 +148,8 @@ class EmotionClassifier(LightningModule):
 
 if __name__ == '__main__':
     torch.multiprocessing.set_start_method('spawn')  # for using GPU
+    torch.manual_seed(RANDOM_SEED)
+    torch.cuda.manual_seed(RANDOM_SEED)
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-epochs", type=int, default=50, dest="epochs", help="epochs")
@@ -266,11 +162,84 @@ if __name__ == '__main__':
     parser.add_argument("-dropout-rate", type=int, default=0.1, dest="dropout_rate", help="rate of dropout")
     parser.add_argument("-gamma", type=int, default=0.9, dest="gamma", help="rate of multiplied with lr for each epoch")
     parser.add_argument("-patience", type=int, default=5, dest="patience", help="num of times monitoring metric can be reduced")
+    num_worker = os.cpu_count() if DEVICE == "cpu" else torch.cuda.device_count()
+    num_worker = num_worker if DEVICE == "cpu" or num_worker <= 2 else 2
+    pad_token_id = 0
+    num_labels = 7
 
+    # prepare datasets
+    train_data = pd.read_csv("./data/train.txt", sep="\t", encoding="utf-8", index_col=0)
+    train_data["data"] = train_data["data"].apply(lambda x: re.sub("[^가-힣a-z0-9.,?! ]", "", x.lower())
+                                                  if re.sub("[^가-힣a-z0-9.,?! ]", "", x.lower()) != "" else None)
+    train_data.dropna(inplace=True)
+    val_data = pd.read_csv("./data/val.txt", sep="\t", encoding="utf-8", index_col=0)
+    val_data["data"] = val_data["data"].apply(lambda x: re.sub("[^가-힣a-z0-9.,?! ]", "", x.lower())
+                                              if re.sub("[^가-힣a-z0-9.,?! ]", "", x.lower()) != "" else None)
+    val_data.dropna(inplace=True)
+
+    # define model, optim, lr_scehduler, accuracy
     args = parser.parse_args()
-    model = EmotionClassifier(args)
-    trainer = Trainer(max_epochs=args.epochs, gpus=torch.cuda.device_count(), logger=TensorBoardLogger("./model/tensorboardLog/"))
-    trainer.fit(model)
+    model = EmotionClassifier(**args.__dict__)
+    optim = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.dropout_rate)
+    lr_scheduler = ExponentialLR(optim, gamma=args.gamma)
+    accuracy = Accuracy(num_classes=num_labels, ignore_index=pad_token_id)
+    # make dataloader
+    train_set = DataLoader(charDataset(train_data["data"].to_list(), train_data["label"].to_list()),
+                           batch_size=args.batch_size, shuffle=True, drop_last=True, num_workers=num_worker)
+    val_set = DataLoader(charDataset(val_data["data"].to_list(), val_data["label"].to_list()),
+                         batch_size=args.batch_size, shuffle=True, drop_last=True, num_workers=num_worker)
+
+    last_metric = 0
+    best_metric = 0
+    patience_cnt = 0
+    logger.info(model)
+    logger.info("start Training.")
+    for i in range(args.epochs):
+        # train step
+        for j, (train_x, train_Y) in enumerate(train_set):
+            optim.zero_grad()
+            pred = model(train_x)
+            loss = F.cross_entropy(pred, train_Y, ignore_index=pad_token_id)
+            acc = accuracy(torch.argmax(pred, dim=1), train_Y)
+
+            if j % 10 == 0:
+                logger.info(f"Epoch {i} : loss - {loss}, acc- {acc} | progress : {j}/{len(train_set)}")
+                logger.debug(f"pred : {torch.argmax(pred, dim=1)}")
+
+            _ = torch.nn.utils.clip_grad_norm_(model.parameters(), 50.0)
+            loss.backward()
+            optim.step()
+
+        # validation step
+        loss_list = []
+        acc_list = []
+        for j, (val_x, val_Y) in enumerate(val_set):
+            with torch.no_grad:
+                pred = model(val_x)
+                loss = F.cross_entropy(pred, val_Y)
+                acc = accuracy(torch.argmax(pred, dim=1), val_Y)
+
+                loss_list.append(loss)
+                acc_list.append(acc)
+                if j % 10 == 0:
+                    logger.info(f"Epoch {i} : val_loss - {loss}, val_acc - {acc} | progress : {j}/{len(val_set)}")
+                    logger.debug(f"pred : {torch.argmax(pred, dim=1)}")
+        logger.info(f"Epoch {i} : avg_val_loss - {sum(loss_list)/len(loss_list)}, avg_val_acc - {sum(acc_list)/len(acc_list)}")
+
+        # Ealry Stopping
+        avg_val_acc = sum(acc_list)/len(acc_list)
+        if last_metric > avg_val_acc:
+            patience_cnt += 1
+            if patience_cnt > args.patience:
+                logger.info(f"metrics was not improved at {args.patience} times. stop training.")
+                break
+        else:
+            # ModelCheckpoint(SaveBestOnly)
+            if best_metric < avg_val_acc:
+                best_metric = avg_val_acc
+                logger.info(f"avg_val_acc has achived to best({avg_val_acc}). save model state.")
+                torch.save(model.state_dict(), "./model/best_state.pt")
+            patience_cnt = 0
     torch.save(model.state_dict(), "./model/emotion_classifier_state.pt")
 
     example_input = model.tokenize("이건 트레이싱을 위한 예시 입력입니다.")
