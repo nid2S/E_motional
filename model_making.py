@@ -205,7 +205,7 @@ if __name__ == '__main__':
             acc = accuracy(torch.argmax(pred, dim=1), train_Y)
 
             if j % 10 == 0:
-                logger.info(f"Epoch {i} : loss - {loss}, acc- {acc} | progress : {j}/{len(train_set)}")
+                logger.info(f"Epoch {i} - loss : %.4f, acc : %.2f | progress : {j}/{len(train_set)}" % (float(loss), acc))
                 logger.debug(f"pred : {torch.argmax(pred, dim=1)}")
 
             _ = torch.nn.utils.clip_grad_norm_(model.parameters(), 50.0)
@@ -224,9 +224,9 @@ if __name__ == '__main__':
                 loss_list.append(loss)
                 acc_list.append(acc)
                 if j % 10 == 0:
-                    logger.info(f"Epoch {i} : val_loss - {loss}, val_acc - {acc} | progress : {j}/{len(val_set)}")
+                    logger.info(f"Epoch {i} - val_loss : %.4f, val_acc : %.2f | progress : {j}/{len(val_set)}" % (float(loss), acc))
                     logger.debug(f"pred : {torch.argmax(pred, dim=1)}")
-        logger.info(f"Epoch {i} : avg_val_loss - {sum(loss_list)/len(loss_list)}, avg_val_acc - {sum(acc_list)/len(acc_list)}")
+        logger.info(f"Epoch {i} - avg_val_loss : %.4f, avg_val_acc : %.2f" % (sum(loss_list)/len(loss_list), sum(acc_list)/len(acc_list)))
 
         # Ealry Stopping
         avg_val_acc = sum(acc_list)/len(acc_list)
@@ -236,6 +236,7 @@ if __name__ == '__main__':
                 logger.info(f"metrics was not improved at {args.patience} times. stop training.")
                 break
         else:
+            logger.info("metrics was improved.")
             # ModelCheckpoint(SaveBestOnly)
             if best_metric < avg_val_acc:
                 best_metric = avg_val_acc
