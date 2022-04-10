@@ -8,7 +8,7 @@ import argparse
 import pandas as pd
 from torch.functional import F
 from hgtk.text import decompose
-from typing import List, Tuple
+from typing import List, Optional
 from torchmetrics import Accuracy
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import ExponentialLR
@@ -36,7 +36,7 @@ class charDataset(torch.utils.data.Dataset):
     def __len__(self) -> int:
         return len(self.Y)
 
-    def __getitem__(self, index) -> Tuple[torch.LongTensor, torch.Tensor]:
+    def __getitem__(self, index) -> (torch.LongTensor, torch.Tensor):
         return torch.LongTensor(self.x[index]).to(DEVICE), torch.scalar_tensor(self.Y[index], dtype=torch.long).to(DEVICE)
 
     def encoding_list(self, sent: str) -> List[int]:
@@ -63,9 +63,11 @@ class charDataset(torch.utils.data.Dataset):
         return encoded_sent
 
 class PositionalEncoding(torch.nn.Module):
-    def __init__(self, input_dim, model_dim, dropout_rate):
+    def __init__(self, input_dim, model_dim, dropout_rate, device: Optional[str]):
         super(PositionalEncoding, self).__init__()
         self.dropout = torch.nn.Dropout(dropout_rate)
+        if device is None:
+            device = DEVICE
 
         pos_encoding = torch.zeros(input_dim, model_dim)
         position_list = torch.arange(input_dim, dtype=torch.float).view(-1, 1)  # == unsqueez(1), shape -> (input_dim, 1)
@@ -75,7 +77,7 @@ class PositionalEncoding(torch.nn.Module):
         pos_encoding[:, 0::2] = torch.sin(position_list * division_term)
         # PE(pos, 2i + 1) = cos(pos/1000^(2i/dim_model))
         pos_encoding[:, 1::2] = torch.cos(position_list * division_term)
-        self.pos_encoding = pos_encoding.unsqueeze(0).transpose(0, 1).to(DEVICE)
+        self.pos_encoding = pos_encoding.unsqueeze(0).transpose(0, 1).to(device)
         try:
             self.register_buffer("pos_encoding", pos_encoding)
         except KeyError:
@@ -98,20 +100,20 @@ class EmotionClassifier(torch.nn.Module):
         input_dim = MAX_LEN
         vocab_size = VOCAB_SIZE
 
-        self.embeddingLayer = torch.nn.Embedding(vocab_size, embedding_size, padding_idx=pad_token_id)
+        self.embeddingLayer = torch.nn.Embedding(vocab_size, embedding_size, padding_idx=pad_token_id, device=DEVICE)
         self.linearLayer = torch.nn.Sequential(
-            torch.nn.Linear(embedding_size, hidden_size),
+            torch.nn.Linear(embedding_size, hidden_size, device=DEVICE),
             torch.nn.ELU(),
-            torch.nn.LayerNorm(hidden_size)
+            torch.nn.LayerNorm(hidden_size, device=DEVICE)
         )
         encoder_layer = torch.nn.TransformerEncoderLayer(hidden_size, num_heads, dropout=dropout_rate, device=DEVICE,
                                                          dim_feedforward=2048, activation=F.gelu, batch_first=True)
         self.transformerEncoder = torch.nn.Sequential(
-            PositionalEncoding(input_dim, hidden_size, dropout_rate),
-            torch.nn.TransformerEncoder(encoder_layer, num_layers, norm=torch.nn.LayerNorm(hidden_size))
+            PositionalEncoding(input_dim, hidden_size, dropout_rate, device=DEVICE),
+            torch.nn.TransformerEncoder(encoder_layer, num_layers, norm=torch.nn.LayerNorm(hidden_size, device=DEVICE))
         )
         self.outputLayer = torch.nn.Sequential(
-            torch.nn.Linear(hidden_size, num_labels),
+            torch.nn.Linear(hidden_size, num_labels, device=DEVICE),
             torch.nn.Softmax(dim=-1)
         )
 
@@ -182,7 +184,7 @@ if __name__ == '__main__':
     model = EmotionClassifier(**args.__dict__)
     optim = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.dropout_rate)
     lr_scheduler = ExponentialLR(optim, gamma=args.gamma)
-    accuracy = Accuracy(num_classes=num_labels, ignore_index=pad_token_id)
+    accuracy = Accuracy(num_classes=num_labels, ignore_index=pad_token_id).to(DEVICE)
     # make dataloader
     train_set = DataLoader(charDataset(train_data["data"].to_list(), train_data["label"].to_list()),
                            batch_size=args.batch_size, shuffle=True, drop_last=True, num_workers=num_worker)
