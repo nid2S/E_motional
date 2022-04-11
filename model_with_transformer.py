@@ -101,11 +101,7 @@ class EmotionClassifier(torch.nn.Module):
         vocab_size = VOCAB_SIZE
 
         self.embeddingLayer = torch.nn.Embedding(vocab_size, embedding_size, padding_idx=pad_token_id, device=DEVICE)
-        self.linearLayer = torch.nn.Sequential(
-            torch.nn.Linear(embedding_size, hidden_size, device=DEVICE),
-            torch.nn.ELU(),
-            torch.nn.LayerNorm(hidden_size, device=DEVICE)
-        )
+        self.linearLayer = torch.nn.Linear(embedding_size, hidden_size, device=DEVICE)
         encoder_layer = torch.nn.TransformerEncoderLayer(hidden_size, num_heads, dropout=dropout_rate, device=DEVICE,
                                                          dim_feedforward=2048, activation=F.gelu, batch_first=True)
         self.transformerEncoder = torch.nn.Sequential(
@@ -116,6 +112,7 @@ class EmotionClassifier(torch.nn.Module):
             torch.nn.Linear(hidden_size, num_labels, device=DEVICE),
             torch.nn.Softmax(dim=-1)
         )
+        torch.nn.init.xavier_uniform_(self.linearLayer.weight)
 
     def forward(self, x):
         x = self.embeddingLayer(x)
@@ -216,7 +213,7 @@ if __name__ == '__main__':
         loss_list = []
         acc_list = []
         for j, (val_x, val_Y) in enumerate(val_set):
-            with torch.no_grad:
+            with torch.no_grad():
                 pred = model(val_x)
                 loss = F.cross_entropy(pred, val_Y)
                 acc = accuracy(torch.argmax(pred, dim=1), val_Y)
