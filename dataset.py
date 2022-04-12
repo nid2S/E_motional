@@ -81,12 +81,12 @@ class charDataset(Dataset):
     def prepare_data():
         train_data = pd.read_csv("./data/train.txt", sep="\t", encoding="utf-8", index_col=0)
         train_data["data"] = train_data["data"].apply(lambda x: re.sub("[^가-힣a-z0-9.,?! ]", "", x.lower())
-        if re.sub("[^가-힣a-z0-9.,?! ]", "", x.lower()) != "" else None)
+                                                      if re.sub("[^가-힣a-z0-9.,?! ]", "", x.lower()) != "" else None)
         train_data.dropna(inplace=True)
 
         val_data = pd.read_csv("./data/val.txt", sep="\t", encoding="utf-8", index_col=0)
         val_data["data"] = val_data["data"].apply(lambda x: re.sub("[^가-힣a-z0-9.,?! ]", "", x.lower())
-        if re.sub("[^가-힣a-z0-9.,?! ]", "", x.lower()) != "" else None)
+                                                  if re.sub("[^가-힣a-z0-9.,?! ]", "", x.lower()) != "" else None)
         val_data.dropna(inplace=True)
 
         return train_data, val_data

@@ -116,10 +116,11 @@ class EmotionClassifier(torch.nn.Module):
 
     def forward(self, x):
         x = self.embeddingLayer(x)
+        x = torch.mean(x, dim=1)
         x = self.linearLayer(x)
         x = self.transformerEncoder(x)
         output = self.outputLayer(x)
-        return torch.mean(output, dim=1)
+        return output
 
     def tokenize(self, sent: str) -> torch.Tensor:
         vocab = dict((token, idx) for _, (token, idx) in pd.read_csv("./data/vocab.txt", sep="\t", encoding="utf-8", index_col=0).iterrows())
