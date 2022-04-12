@@ -50,8 +50,8 @@ model = MobileBertForSequenceClassification.from_pretrained(PREMODEL_NAME, num_l
 tokenizer = MobileBertTokenizerFast.from_pretrained(PREMODEL_NAME)
 data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
 
-log_dir = os.path.join('./model/trainer/logs/', datetime.datetime.now().strftime('%Y%m%d-%H%M%S'))
-train_args = TrainingArguments(output_dir="./model/trainer/output_dir/",
+log_dir = os.path.join('model/HF/trainer/logs/', datetime.datetime.now().strftime('%Y%m%d-%H%M%S'))
+train_args = TrainingArguments(output_dir="model/HF/trainer/output_dir/",
                                logging_dir=log_dir,
                                do_train=True,
                                do_eval=True,
@@ -70,7 +70,7 @@ trainer = Trainer(model=model, args=train_args, data_collator=data_collator, com
                   train_dataset=getDataset(isTrain=True, using_device=device),
                   eval_dataset=getDataset(isTrain=False, using_device=device))
 trainer.train()
-torch.save(model, "./model/trainer/pytorch_model.bin")
+torch.save(model, "model/HF/trainer/pytorch_model.bin")
 
 # model = MobileBertForSequenceClassification.from_pretrained("./model/trainer")
 # tokenizer = MobileBertTokenizerFast.from_pretrained(PREMODEL_NAME)

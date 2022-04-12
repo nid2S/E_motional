@@ -39,8 +39,8 @@ class EmotionClassifier(pl.LightningModule):
 
         self.train_set = None
         self.val_set = None
-        self.num_workers = os.cpu_count() if self.device == "cpu" else torch.cuda.device_count()
-        self.num_workers = self.num_workers if self.device == "cpu" or self.num_workers <= 2 else 2
+        self.num_workers = os.cpu_count() if str(self.device) == "cpu" else torch.cuda.device_count()
+        self.num_workers = self.num_workers if str(self.device) == "cpu" or self.num_workers <= 2 else 2
         conv_layer_output_dim = (((emb_dim - cnn_first_kernel + 1) // 2) - cnn_second_kernel + 1) // 2
         pl.seed_everything(RANDOM_SEED)
 
@@ -74,7 +74,7 @@ class EmotionClassifier(pl.LightningModule):
         return [optim], [lr_scheduler]
 
     def configure_callbacks(self):
-        model_ckp = ModelCheckpoint(dirpath=f"./model/model_ckp/", filename='{epoch:02d}_{loss:.2f}', verbose=True,
+        model_ckp = ModelCheckpoint(dirpath=f"./model/CNN/model_ckp/", filename='{epoch:02d}_{loss:.2f}', verbose=True,
                                     save_last=True, monitor='val_loss', mode='min')
         early_stoppint = EarlyStopping(monitor="val_loss", mode="min", patience=self.patience)
         lr_monitor = LearningRateMonitor(logging_interval="step")
@@ -135,7 +135,7 @@ if __name__ == "__main__":
     parser.add_argument("-embedding_size", type=int, default=512, dest="emb_dim", help="size of embedding layer")
     parser.add_argument("-hidden_size", type=int, default=256, dest="hidden_dim", help="size of hidden layer")
     parser.add_argument("-gamma", type=int, default=0.9, dest="gamma", help="rate of multiplied with lr for each epoch")
-    parser.add_argument("-patience", type=int, default=5, dest="patience", help="num of times monitoring metric can be reduced")
+    parser.add_argument("-patience", type=int, default=3, dest="patience", help="num of times monitoring metric can be reduced")
     parser.add_argument("-dropout_rate", type=int, default=0.1, dest="dropout_rate", help="rate of dropout")
     parser.add_argument("-cnn_first_kernel", type=int, default=10, dest="cnn_first_kernel", help="kernel size in first CNN")
     parser.add_argument("-cnn_second_kernel", type=int, default=4, dest="cnn_second_kernel", help="kernel size in second CNN")
@@ -145,12 +145,12 @@ if __name__ == "__main__":
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model = EmotionClassifier(**args.__dict__)
     trainer = Trainer(max_epochs=args.epochs, gpus=torch.cuda.device_count(),
-                      logger=TensorBoardLogger("./model/tensorboardLog/"))
+                      logger=TensorBoardLogger("./model/CNN/tensorboardLog/"))
     trainer.fit(model)
-    torch.save(model.state_dict(), "./model/emotion_classifier_state.pt")
+    torch.save(model.state_dict(), "model/CNN/emotion_classifier_state.pt")
 
     example_input = tokenize("이건 트레이싱을 위한 예시 입력입니다.", device)
     model = torch.quantization.convert(model)
     model = torch.jit.trace(model, example_input, strict=False)
     opt_model = optimize_for_mobile(model)
-    opt_model._save_for_lite_interpreter("./model/emotion_classifier.ptl")
+    opt_model._save_for_lite_interpreter("./model/CNN/emotion_classifier.ptl")
