@@ -36,7 +36,7 @@ def tokenize(sent: str, device: str) -> torch.Tensor:
 
     encoded_sent = [0] * (MAX_LEN - len(encoded_sent)) + encoded_sent
     encoded_sent = encoded_sent[:MAX_LEN]
-    return encoded_sent
+    return torch.LongTensor(encoded_sent)
 
 class charDataset(Dataset):
     def __init__(self, x, Y, device: Optional[str]):

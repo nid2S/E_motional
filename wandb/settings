@@ -1,0 +1,5 @@
+[default]
+entity = nid2
+project = E_motional
+base_url = https://api.wandb.ai
+

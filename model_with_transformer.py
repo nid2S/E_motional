@@ -1,32 +1,25 @@
 import setuptools
-import re
 import os
 import wandb
 import torch
-import logging
 import argparse
-import pandas as pd
 from torch.functional import F
-from hgtk.text import decompose
 from torchmetrics import Accuracy
 from torch.utils.data import DataLoader
-from dataset import charDataset, tokenize
+from dataset import charDataset, tokenize, logger
 from torch.optim.lr_scheduler import ExponentialLR
 from torch.utils.mobile_optimizer import optimize_for_mobile
 
 MAX_LEN = 415  # train - 415, val - 364, test - 289
 VOCAB_SIZE = 150
 RANDOM_SEED = 7777
-logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
-logger.addHandler(logging.StreamHandler())
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 class EmotionClassifier(torch.nn.Module):
     def __init__(self,
                  embedding_size: int = 512,
                  hidden_size: int = 256,
-                 num_heads: int = 6,
+                 num_heads: int = 8,
                  num_layers: int = 6,
                  dropout_rate: float = 0.1,
                  **kwargs):
@@ -41,14 +34,13 @@ class EmotionClassifier(torch.nn.Module):
             torch.nn.Embedding(self.vocab_size, embedding_size, padding_idx=self.pad_token_ids, device=self.device),
             torch.nn.LayerNorm(embedding_size, device=self.device)
         )
-        self.linearLayer = torch.nn.Linear(embedding_size, hidden_size, device=DEVICE)
-
         encoder_layer = torch.nn.TransformerEncoderLayer(
-            hidden_size, num_heads, dropout=dropout_rate, device=DEVICE, dim_feedforward=2048, activation=F.gelu, batch_first=True
+            embedding_size, num_heads, dropout=dropout_rate, device=DEVICE, dim_feedforward=2048, activation=F.gelu, batch_first=True
         )
-        self.transformerEncoder = torch.nn.TransformerEncoder(encoder_layer, num_layers, norm=torch.nn.LayerNorm(hidden_size, device=DEVICE))
+        self.transformerEncoder = torch.nn.TransformerEncoder(encoder_layer, num_layers,
+                                                              norm=torch.nn.LayerNorm(embedding_size, device=DEVICE))
         self.classificationHead = torch.nn.Sequential(
-            torch.nn.Linear(hidden_size, hidden_size*2, device=self.device),
+            torch.nn.Linear(embedding_size, hidden_size*2, device=self.device),
             torch.nn.Tanh(),
             torch.nn.Linear(hidden_size*2, hidden_size, device=self.device),
             torch.nn.Tanh(),
@@ -58,9 +50,8 @@ class EmotionClassifier(torch.nn.Module):
 
     def forward(self, x):
         x = self.embeddingLayer(x)
-        x = torch.mean(x, dim=1)
-        x = self.linearLayer(x)
         x = self.transformerEncoder(x)
+        x = torch.mean(x, dim=1)
         output = self.classificationHead(x)
         return output
 
@@ -69,6 +60,9 @@ if __name__ == '__main__':
     torch.multiprocessing.set_start_method('spawn')  # for using GPU
     torch.manual_seed(RANDOM_SEED)
     torch.cuda.manual_seed(RANDOM_SEED)
+    wandb.login()
+    wandb.init(project="E_motional")
+    wandb.run.name = wandb.run.id
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-epochs", type=int, default=50, dest="epochs", help="epochs")
@@ -79,16 +73,19 @@ if __name__ == '__main__':
     parser.add_argument("-gamma", type=int, default=0.9, dest="gamma", help="rate of multiplied with lr for each epoch")
     parser.add_argument("-patience", type=int, default=5, dest="patience", help="num of times monitoring metric can be reduced")
     parser.add_argument("-dropout-rate", type=int, default=0.1, dest="dropout_rate", help="rate of dropout")
-    parser.add_argument("-num-heads", type=int, default=6, dest="num_heads", help="num of attention heads")
+    parser.add_argument("-num-heads", type=int, default=8, dest="num_heads", help="num of attention heads")
     parser.add_argument("-num-layers", type=int, default=6, dest="num_layers", help="num of attention layers")
-    num_worker = os.cpu_count() if DEVICE == "cpu" else torch.cuda.device_count()
+    num_worker = os.cpu_count() - 1 if DEVICE == "cpu" else torch.cuda.device_count()
     num_worker = num_worker if DEVICE == "cpu" or num_worker <= 2 else 2
     pad_token_id = 0
     num_labels = 7
 
     # define model, optim, lr_scehduler, accuracy
     args = parser.parse_args()
+    wandb.config.update(args)
     model = EmotionClassifier(**args.__dict__)
+    wandb.watch(model)
+
     optim = torch.optim.AdamW(model.parameters(), lr=args.lr)
     lr_scheduler = ExponentialLR(optim, gamma=args.gamma)
     accuracy = Accuracy(num_classes=num_labels, ignore_index=pad_token_id).to(DEVICE)
@@ -114,8 +111,9 @@ if __name__ == '__main__':
 
             if j % 10 == 0:
                 logger.info(f"Epoch {i} - loss : %.4f, acc : %.2f | progress : {j}/{len(train_set)}" % (float(loss), acc))
+                wandb.log({"loss": float(loss), "acc": acc})
                 logger.debug(f"pred : {torch.argmax(pred, dim=1)}")
-
+                wandb.Histogram(torch.argmax(pred, dim=1))
             _ = torch.nn.utils.clip_grad_norm_(model.parameters(), 50.0)
             loss.backward()
             optim.step()
@@ -133,8 +131,9 @@ if __name__ == '__main__':
                 acc_list.append(acc)
                 if j % 10 == 0:
                     logger.info(f"Epoch {i} - val_loss : %.4f, val_acc : %.2f | progress : {j}/{len(val_set)}" % (float(loss), acc))
-                    logger.debug(f"pred : {torch.argmax(pred, dim=1)}")
+                    wandb.log({"val_loss": float(loss), "val_acc": acc})
         logger.info(f"Epoch {i} - avg_val_loss : %.4f, avg_val_acc : %.2f" % (sum(loss_list)/len(loss_list), sum(acc_list)/len(acc_list)))
+        wandb.log({"avg_val_loss": sum(loss_list)/len(loss_list), "avg_acc_loss": sum(acc_list)/len(acc_list)})
 
         # Ealry Stopping
         avg_val_acc = sum(acc_list)/len(acc_list)
@@ -153,7 +152,7 @@ if __name__ == '__main__':
             patience_cnt = 0
     torch.save(model.state_dict(), "./model/Transformer/emotion_classifier_state.pt")
 
-    example_input = model.tokenize("이건 트레이싱을 위한 예시 입력입니다.")
+    example_input = tokenize("이건 트레이싱을 위한 예시 입력입니다.", DEVICE)
     model = torch.quantization.convert(model)
     model = torch.jit.trace(model, example_input, strict=False)
     opt_model = optimize_for_mobile(model)
