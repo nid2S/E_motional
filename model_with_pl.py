@@ -20,7 +20,7 @@ class EmotionClassifier(pl.LightningModule):
                  batch_size: int = 32,
                  lr: float = 0.001,
                  gamma: float = 0.9,
-                 patience: int = 10,
+                 patience: int = 5,
                  cnn_first_kernel: int = 10,
                  cnn_second_kernel: int = 4,
                  cnn_first_output_channel: int = 256,
@@ -135,7 +135,7 @@ if __name__ == "__main__":
     parser.add_argument("-embedding_size", type=int, default=512, dest="emb_dim", help="size of embedding layer")
     parser.add_argument("-hidden_size", type=int, default=256, dest="hidden_dim", help="size of hidden layer")
     parser.add_argument("-gamma", type=int, default=0.9, dest="gamma", help="rate of multiplied with lr for each epoch")
-    parser.add_argument("-patience", type=int, default=3, dest="patience", help="num of times monitoring metric can be reduced")
+    parser.add_argument("-patience", type=int, default=5, dest="patience", help="num of times monitoring metric can be reduced")
     parser.add_argument("-dropout_rate", type=int, default=0.1, dest="dropout_rate", help="rate of dropout")
     parser.add_argument("-cnn_first_kernel", type=int, default=10, dest="cnn_first_kernel", help="kernel size in first CNN")
     parser.add_argument("-cnn_second_kernel", type=int, default=4, dest="cnn_second_kernel", help="kernel size in second CNN")

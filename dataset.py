@@ -15,12 +15,11 @@ MAX_LEN = 415
 
 def tokenize(sent: str, device: str) -> torch.Tensor:
     vocab = dict((token, idx) for _, (token, idx) in pd.read_csv("./data/vocab.txt", sep="\t", encoding="utf-8", index_col=0).iterrows())
-    oov_token_id = 1
-    is_subword = False
-
-    encoded_sent = []
-    sent = re.sub("[^가-힣a-z0-9.,?!]", "", sent.lower())
     sent = re.sub(" (\W)", r"\1", decompose(sent, compose_code=" "))
+    is_subword = False
+    encoded_sent = []
+    oov_token_id = 1
+
     for char in sent:
         if char == " ":
             char = "[SPACE]"
@@ -28,13 +27,16 @@ def tokenize(sent: str, device: str) -> torch.Tensor:
         elif not is_subword:
             is_subword = True
         else:
-            char = "##"+char
+            char = "##" + char
 
         try:
             encoded_sent.append(vocab[char])
         except KeyError:
             encoded_sent.append(oov_token_id)
-    return torch.LongTensor(encoded_sent).to(device)
+
+    encoded_sent = [0] * (MAX_LEN - len(encoded_sent)) + encoded_sent
+    encoded_sent = encoded_sent[:MAX_LEN]
+    return encoded_sent
 
 class charDataset(Dataset):
     def __init__(self, x, Y, device: Optional[str]):
