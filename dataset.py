@@ -7,7 +7,7 @@ import logging
 import re
 
 logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 handler = logging.StreamHandler()
 handler.setFormatter(logging.Formatter(fmt=None, style='$'))
 logger.addHandler(handler)
@@ -36,7 +36,7 @@ def tokenize(sent: str, device: str) -> torch.Tensor:
 
     encoded_sent = [0] * (MAX_LEN - len(encoded_sent)) + encoded_sent
     encoded_sent = encoded_sent[:MAX_LEN]
-    return torch.LongTensor(encoded_sent)
+    return torch.LongTensor(encoded_sent).to(device)
 
 class charDataset(Dataset):
     def __init__(self, x, Y, device: Optional[str]):

@@ -75,8 +75,8 @@ class EmotionClassifier(pl.LightningModule):
 
     def configure_callbacks(self):
         model_ckp = ModelCheckpoint(dirpath=f"./model/CNN/model_ckp/", filename='{epoch:02d}_{loss:.2f}', verbose=True,
-                                    save_last=True, monitor='val_loss', mode='min')
-        early_stoppint = EarlyStopping(monitor="val_loss", mode="min", patience=self.patience)
+                                    save_last=True, monitor='val_acc', mode='max')
+        early_stoppint = EarlyStopping(monitor="val_acc", mode="max", patience=self.patience)
         lr_monitor = LearningRateMonitor(logging_interval="step")
         return [model_ckp, early_stoppint, lr_monitor]
 
@@ -131,7 +131,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-epochs", type=int, default=50, dest="epochs", help="epochs")
     parser.add_argument("-batch_size", type=int, default=32, dest="batch_size", help="batch_size")
-    parser.add_argument("-lr", type=int, default=0.001, dest="lr", help="learning rate")
+    parser.add_argument("-lr", type=int, default=0.0001, dest="lr", help="learning rate")
     parser.add_argument("-embedding_size", type=int, default=512, dest="emb_dim", help="size of embedding layer")
     parser.add_argument("-hidden_size", type=int, default=256, dest="hidden_dim", help="size of hidden layer")
     parser.add_argument("-gamma", type=int, default=0.9, dest="gamma", help="rate of multiplied with lr for each epoch")
@@ -149,7 +149,7 @@ if __name__ == "__main__":
     trainer.fit(model)
     torch.save(model.state_dict(), "model/CNN/emotion_classifier_state.pt")
 
-    example_input = tokenize("이건 트레이싱을 위한 예시 입력입니다.", device)
+    example_input = tokenize("이건 트레이싱을 위한 예시 입력입니다.", device).unsqueeze(0)
     model = torch.quantization.convert(model)
     model = torch.jit.trace(model, example_input, strict=False)
     opt_model = optimize_for_mobile(model)

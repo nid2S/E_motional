@@ -29,31 +29,10 @@ class EmotionClassifier(torch.nn.Module):
         self.input_dim = MAX_LEN
         self.vocab_size = VOCAB_SIZE
         self.device = DEVICE
-
-        self.embeddingLayer = torch.nn.Sequential(
-            torch.nn.Embedding(self.vocab_size, embedding_size, padding_idx=self.pad_token_ids, device=self.device),
-            torch.nn.LayerNorm(embedding_size, device=self.device)
-        )
-        encoder_layer = torch.nn.TransformerEncoderLayer(
-            embedding_size, num_heads, dropout=dropout_rate, device=DEVICE, dim_feedforward=2048, activation=F.gelu, batch_first=True
-        )
-        self.transformerEncoder = torch.nn.TransformerEncoder(encoder_layer, num_layers,
-                                                              norm=torch.nn.LayerNorm(embedding_size, device=DEVICE))
-        self.classificationHead = torch.nn.Sequential(
-            torch.nn.Linear(embedding_size, hidden_size*2, device=self.device),
-            torch.nn.Tanh(),
-            torch.nn.Linear(hidden_size*2, hidden_size, device=self.device),
-            torch.nn.Tanh(),
-            torch.nn.Linear(hidden_size, self.num_labels, device=self.device),
-            torch.nn.Softmax(dim=1)
-        )
+        pass
 
     def forward(self, x):
-        x = self.embeddingLayer(x)
-        x = self.transformerEncoder(x)
-        x = torch.mean(x, dim=1)
-        output = self.classificationHead(x)
-        return output
+        pass
 
 
 if __name__ == '__main__':
@@ -113,7 +92,7 @@ if __name__ == '__main__':
                 logger.info(f"Epoch {i} - loss : %.4f, acc : %.2f | progress : {j}/{len(train_set)}" % (float(loss), acc))
                 wandb.log({"loss": float(loss), "acc": acc})
                 logger.debug(f"pred : {torch.argmax(pred, dim=1)}")
-                wandb.Histogram(torch.argmax(pred, dim=1))
+                wandb.Histogram(torch.argmax(pred.to("cpu"), dim=1))
             _ = torch.nn.utils.clip_grad_norm_(model.parameters(), 50.0)
             loss.backward()
             optim.step()
@@ -124,7 +103,7 @@ if __name__ == '__main__':
         for j, (val_x, val_Y) in enumerate(val_set):
             with torch.no_grad():
                 pred = model(val_x)
-                loss = F.cross_entropy(pred, val_Y)
+                loss = F.cross_entropy(pred, val_Y, ignore_index=pad_token_id)
                 acc = accuracy(torch.argmax(pred, dim=1), val_Y)
 
                 loss_list.append(loss)
@@ -133,7 +112,7 @@ if __name__ == '__main__':
                     logger.info(f"Epoch {i} - val_loss : %.4f, val_acc : %.2f | progress : {j}/{len(val_set)}" % (float(loss), acc))
                     wandb.log({"val_loss": float(loss), "val_acc": acc})
         logger.info(f"Epoch {i} - avg_val_loss : %.4f, avg_val_acc : %.2f" % (sum(loss_list)/len(loss_list), sum(acc_list)/len(acc_list)))
-        wandb.log({"avg_val_loss": sum(loss_list)/len(loss_list), "avg_acc_loss": sum(acc_list)/len(acc_list)})
+        wandb.log({"avg_val_loss": sum(loss_list)/len(loss_list), "avg_val_acc": sum(acc_list)/len(acc_list)})
 
         # Ealry Stopping
         avg_val_acc = sum(acc_list)/len(acc_list)
