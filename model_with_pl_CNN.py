@@ -21,10 +21,10 @@ class EmotionClassifier(pl.LightningModule):
                  lr: float = 0.001,
                  gamma: float = 0.9,
                  patience: int = 5,
-                 cnn_first_kernel: int = 10,
+                 cnn_first_kernel: int = 5,
                  cnn_second_kernel: int = 4,
                  cnn_first_output_channel: int = 256,
-                 dropout_rate: float = 0.1,
+                 dropout_rate: float = 0.2,
                  **kwargs):
         super().__init__()
         self.input_dim = 415
@@ -44,26 +44,23 @@ class EmotionClassifier(pl.LightningModule):
         conv_layer_output_dim = (((emb_dim - cnn_first_kernel + 1) // 2) - cnn_second_kernel + 1) // 2
         pl.seed_everything(RANDOM_SEED)
 
-        self.embeddingLayer = torch.nn.Sequential(
-            torch.nn.Embedding(self.vocab_size, emb_dim, padding_idx=self.pad_token_ids, device=self.device),
-            torch.nn.LayerNorm(emb_dim, device=self.device)
-        )
+        self.embeddingLayer = torch.nn.Embedding(self.vocab_size, emb_dim, padding_idx=self.pad_token_ids, device=self.device)
         self.convLayer = torch.nn.Sequential(
             torch.nn.Conv1d(self.input_dim, cnn_first_output_channel, (cnn_first_kernel, ), device=self.device),
             torch.nn.MaxPool1d(2),
             torch.nn.ReLU(),
             torch.nn.Conv1d(cnn_first_output_channel, 1, (cnn_second_kernel, ), device=self.device),
+            torch.nn.Dropout(dropout_rate),
             torch.nn.MaxPool1d(2),
             torch.nn.ReLU(),
             torch.nn.Flatten(),
             torch.nn.LayerNorm(conv_layer_output_dim, device=self.device),
-            torch.nn.Dropout(dropout_rate)
         )
         self.classificationHead = torch.nn.Sequential(
             torch.nn.Linear(conv_layer_output_dim, hidden_dim, device=self.device),
-            torch.nn.Tanh(),
+            torch.nn.ReLU(),
             torch.nn.Linear(hidden_dim, hidden_dim//2, device=self.device),
-            torch.nn.Tanh(),
+            torch.nn.ReLU(),
             torch.nn.Linear(hidden_dim//2, self.num_labels, device=self.device),
             torch.nn.Softmax(dim=1)
         )
@@ -131,13 +128,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-epochs", type=int, default=50, dest="epochs", help="epochs")
     parser.add_argument("-batch_size", type=int, default=32, dest="batch_size", help="batch_size")
-    parser.add_argument("-lr", type=int, default=0.0001, dest="lr", help="learning rate")
+    parser.add_argument("-lr", type=int, default=1e-3, dest="lr", help="learning rate")
     parser.add_argument("-embedding_size", type=int, default=512, dest="emb_dim", help="size of embedding layer")
     parser.add_argument("-hidden_size", type=int, default=256, dest="hidden_dim", help="size of hidden layer")
     parser.add_argument("-gamma", type=int, default=0.9, dest="gamma", help="rate of multiplied with lr for each epoch")
     parser.add_argument("-patience", type=int, default=5, dest="patience", help="num of times monitoring metric can be reduced")
-    parser.add_argument("-dropout_rate", type=int, default=0.1, dest="dropout_rate", help="rate of dropout")
-    parser.add_argument("-cnn_first_kernel", type=int, default=10, dest="cnn_first_kernel", help="kernel size in first CNN")
+    parser.add_argument("-dropout_rate", type=int, default=0.2, dest="dropout_rate", help="rate of dropout")
+    parser.add_argument("-cnn_first_kernel", type=int, default=5, dest="cnn_first_kernel", help="kernel size in first CNN")
     parser.add_argument("-cnn_second_kernel", type=int, default=4, dest="cnn_second_kernel", help="kernel size in second CNN")
     parser.add_argument("-cnn_first_output_channel", type=int, default=256, dest="cnn_first_output_channel", help="output channel at first CNN")
 
@@ -154,3 +151,4 @@ if __name__ == "__main__":
     model = torch.jit.trace(model, example_input, strict=False)
     opt_model = optimize_for_mobile(model)
     opt_model._save_for_lite_interpreter("./model/CNN/emotion_classifier.ptl")
+    logger.info("change to pytorch mobile is ended")
