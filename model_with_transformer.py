@@ -46,7 +46,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-epochs", type=int, default=50, dest="epochs", help="epochs")
     parser.add_argument("-batch_size", type=int, default=32, dest="batch_size", help="batch_size")
-    parser.add_argument("-lr", type=int, default=0.001, dest="lr", help="learning rate")
+    parser.add_argument("-lr", type=int, default=1e-4, dest="lr", help="learning rate")
     parser.add_argument("-embedding-size", type=int, default=512, dest="embedding_size", help="size of embedding layer")
     parser.add_argument("-hidden_size", type=int, default=256, dest="hidden_size", help="size of hidden layer")
     parser.add_argument("-gamma", type=int, default=0.9, dest="gamma", help="rate of multiplied with lr for each epoch")
@@ -84,15 +84,18 @@ if __name__ == '__main__':
         # train step
         for j, (train_x, train_Y) in enumerate(train_set):
             optim.zero_grad()
-            pred = model(train_x)
+            pred = model(train_x).logits
             loss = F.cross_entropy(pred, train_Y, ignore_index=pad_token_id)
             acc = accuracy(torch.argmax(pred, dim=1), train_Y)
 
             if j % 10 == 0:
                 logger.info(f"Epoch {i} - loss : %.4f, acc : %.2f | progress : {j}/{len(train_set)}" % (float(loss), acc))
                 wandb.log({"loss": float(loss), "acc": acc})
-                logger.debug(f"pred : {torch.argmax(pred, dim=1)}")
-                wandb.Histogram(torch.argmax(pred.to("cpu"), dim=1))
+                for name, param in model.named_parameters():
+                    try:
+                        wandb.Histogram(name, param.to("cpu"))
+                    except RuntimeError:
+                        pass
             _ = torch.nn.utils.clip_grad_norm_(model.parameters(), 50.0)
             loss.backward()
             optim.step()
@@ -102,7 +105,7 @@ if __name__ == '__main__':
         acc_list = []
         for j, (val_x, val_Y) in enumerate(val_set):
             with torch.no_grad():
-                pred = model(val_x)
+                pred = model(val_x).logits
                 loss = F.cross_entropy(pred, val_Y, ignore_index=pad_token_id)
                 acc = accuracy(torch.argmax(pred, dim=1), val_Y)
 
